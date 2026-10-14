@@ -1,0 +1,44 @@
+:root {
+  color: #1e3932;
+  background: #f7f5ef;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body { margin: 0; min-width: 360px; }
+
+button { font: inherit; }
+
+.popup-shell { padding: 20px; }
+.eyebrow { color: #7f6a00; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.08em; margin: 0 0 7px; }
+h1 { font-size: 1.5rem; line-height: 1.1; margin: 0; }
+.intro { color: #53665e; font-size: 0.86rem; line-height: 1.4; margin: 8px 0 16px; }
+.demo-label { background: #fff1c4; border-radius: 6px; color: #685300; font-size: 0.76rem; font-weight: 700; margin: 0 0 12px; padding: 8px; }
+.results-list { display: grid; gap: 12px; }
+.professor-card { background: #fff; border: 1px solid #d7ddd7; border-radius: 10px; box-shadow: 0 2px 5px rgb(31 57 50 / 7%); padding: 14px; }
+.card-heading { align-items: start; display: flex; gap: 10px; justify-content: space-between; }
+h2 { font-size: 1rem; margin: 0; }
+.card-heading p, .review-count { color: #53665e; font-size: 0.8rem; margin: 4px 0 0; }
+.rating { color: #765f00; font-size: 1.1rem; font-weight: 800; white-space: nowrap; }
+.traits { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.traits span { background: #e9f1ed; border-radius: 99px; color: #28523d; font-size: 0.72rem; font-weight: 650; padding: 4px 8px; }
+button { background: #1e5c44; border: 0; border-radius: 6px; color: #fff; cursor: pointer; font-weight: 700; padding: 8px 11px; }
+button:hover, button:focus-visible { background: #164531; }
+button:focus-visible { outline: 3px solid #d2a800; outline-offset: 2px; }
+.selection-notice { background: #e9f1ed; border-left: 4px solid #1e5c44; font-size: 0.82rem; line-height: 1.4; margin-top: 16px; padding: 10px; }
+.details-view { display: grid; gap: 14px; }
+.back-button { align-self: start; background: transparent; color: #1e5c44; padding: 0; text-decoration: underline; }
+.back-button:hover, .back-button:focus-visible { background: transparent; color: #123a2a; }
+.details-card, .details-section { background: #fff; border: 1px solid #d7ddd7; border-radius: 10px; padding: 14px; }
+.details-section h2 { font-size: 1rem; margin: 0 0 10px; }
+.trait-scores { display: grid; gap: 8px; margin: 0; }
+.trait-scores div { align-items: center; background: #e9f1ed; border-radius: 6px; display: flex; justify-content: space-between; padding: 8px; }
+.trait-scores dt { font-size: 0.82rem; font-weight: 700; }
+.trait-scores dd { color: #765f00; font-size: 0.84rem; font-weight: 800; margin: 0; }
+.review-list { display: grid; gap: 10px; }
+.review-card { border-top: 1px solid #d7ddd7; padding-top: 10px; }
+.review-card:first-child { border-top: 0; padding-top: 0; }
+.review-heading { display: flex; font-size: 0.84rem; justify-content: space-between; }
+.review-heading span { color: #765f00; font-weight: 800; }
+.review-card p, .empty-state { color: #53665e; font-size: 0.82rem; line-height: 1.45; margin: 7px 0; }

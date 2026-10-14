@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "AI PolyRatings",
+  "version": "0.1.0",
+  "description": "A course-registration companion for comparing professor information.",
+  "action": {
+    "default_title": "AI PolyRatings",
+    "default_popup": "index.html"
+  },
+  "permissions": ["storage"]
+}
