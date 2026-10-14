@@ -8,6 +8,7 @@ Manifest V3 foundation for a Cal Poly Student Center companion extension. The fi
 - Compact Professor Results cards with name, overall rating, review count, and numerical rating traits.
 - A Professor Details view with professor context, numerical trait scores, individual mock reviews, review ratings/tags, and Back navigation.
 - Deterministic, clearly labeled review summaries and recurring-theme chips derived from mock review tags; no AI model or external API is used.
+- A Preferences view that stores characteristic importance and direction choices in `chrome.storage.local`; recommendation scoring is not implemented.
 - Labelled mock data behind an interchangeable `ProfessorDataService` interface.
 - A future-ready `chrome.storage.local` preference-storage module; the preferences UI is not part of this milestone.
 

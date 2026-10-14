@@ -46,3 +46,16 @@ button:focus-visible { outline: 3px solid #d2a800; outline-offset: 2px; }
 .demo-disclosure { color: #685300; font-size: 0.72rem; font-weight: 650; line-height: 1.35; margin: 10px 0 0; }
 .themes { display: flex; flex-wrap: wrap; gap: 7px; }
 .themes span { background: #fff1c4; border-radius: 99px; color: #685300; font-size: 0.76rem; font-weight: 750; padding: 5px 9px; }
+.preferences-button { margin: 0 0 12px; width: 100%; }
+.preferences-view { display: grid; gap: 14px; }
+.preferences-intro { color: #53665e; font-size: 0.82rem; line-height: 1.45; margin: 0 0 12px; }
+.preference-list { display: grid; gap: 10px; }
+.preference-row { border: 1px solid #d7ddd7; border-radius: 7px; display: grid; gap: 8px; margin: 0; padding: 10px; }
+.preference-row legend { font-size: 0.86rem; font-weight: 800; padding: 0 3px; }
+.preference-row label { color: #53665e; display: grid; font-size: 0.74rem; font-weight: 700; gap: 4px; }
+.preference-row select { background: #fff; border: 1px solid #8aa398; border-radius: 5px; color: #1e3932; font: inherit; padding: 7px; }
+.preference-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.secondary-button { background: #e9f1ed; color: #1e5c44; }
+.secondary-button:hover, .secondary-button:focus-visible { background: #d7e6dc; }
+button:disabled { cursor: not-allowed; opacity: 0.6; }
+.save-status { color: #1e5c44; font-size: 0.8rem; font-weight: 700; margin: 10px 0 0; }
