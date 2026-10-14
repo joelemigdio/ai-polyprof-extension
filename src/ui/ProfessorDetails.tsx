@@ -1,4 +1,7 @@
 import type { Professor } from "../models/professor";
+import { mockReviewSummaryService } from "../services/mock-review-summary-service";
+import { CommonReviewThemes } from "./CommonReviewThemes";
+import { ReviewSummary } from "./ReviewSummary";
 
 interface ProfessorDetailsProps {
   professor: Professor;
@@ -8,6 +11,7 @@ interface ProfessorDetailsProps {
 export function ProfessorDetails({ professor, onBack }: ProfessorDetailsProps) {
   const traits = professor.ratingTraits ?? [];
   const reviews = professor.reviews ?? [];
+  const insights = mockReviewSummaryService.getInsights(reviews);
 
   return (
     <section className="details-view" aria-label={`${professor.name} details`}>
@@ -27,6 +31,9 @@ export function ProfessorDetails({ professor, onBack }: ProfessorDetailsProps) {
         </div>
         <p className="review-count">{professor.reviewCount ?? reviews.length} demo reviews</p>
       </article>
+
+      <ReviewSummary summary={insights.summary} />
+      <CommonReviewThemes themes={insights.themes} />
 
       <section className="details-section" aria-labelledby="traits-heading">
         <h2 id="traits-heading">Rating traits</h2>
