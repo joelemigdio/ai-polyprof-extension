@@ -3,6 +3,9 @@ import { mockReviewSummaryService } from "../services/mock-review-summary-servic
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
 import { createInstructorCandidate, findInstructorCandidates, type InstructorCandidate } from "./student-center-adapter";
 
+const hoverDelayMs = 250;
+const hideDelayMs = 140;
+
 export interface StudentCenterIntegrationOptions {
   document: Document;
   professors: Professor[];
@@ -12,139 +15,187 @@ export interface StudentCenterIntegrationOptions {
 export class StudentCenterIntegration {
   private observer: MutationObserver | null = null;
   private scanQueued = false;
+  private showTimer: number | null = null;
+  private hideTimer: number | null = null;
+  private activeCandidate: InstructorCandidate | null = null;
+  private readonly boundTargets = new WeakSet<HTMLElement>();
+  private host: HTMLElement | null = null;
 
   constructor(private readonly options: StudentCenterIntegrationOptions) {}
 
   start(): void {
-    this.injectStyles();
+    this.ensureHoverHost();
     this.scan();
+    this.options.document.addEventListener("keydown", this.handleKeydown);
     this.observer = new MutationObserver(() => this.queueScan());
-    this.observer.observe(this.options.document.body, {
-      attributes: true,
-      attributeFilter: ["data-name"],
-      childList: true,
-      subtree: true,
-    });
+    this.observer.observe(this.options.document.body, { attributes: true, attributeFilter: ["data-name"], childList: true, subtree: true });
   }
 
   stop(): void {
     this.observer?.disconnect();
+    this.options.document.removeEventListener("keydown", this.handleKeydown);
+    this.clearTimers();
+    this.host?.remove();
+    this.host = null;
   }
 
   scan(): void {
     for (const candidate of findInstructorCandidates(this.options.document)) {
-      const button = this.findExistingButton(candidate);
-      if (button) this.updateButton(button, candidate);
-      else this.injectButton(candidate);
+      if (!this.boundTargets.has(candidate.element)) this.bindTarget(candidate);
     }
   }
 
   private queueScan(): void {
     if (this.scanQueued) return;
     this.scanQueued = true;
-    window.setTimeout(() => {
-      this.scanQueued = false;
-      this.scan();
-    }, 50);
+    window.setTimeout(() => { this.scanQueued = false; this.scan(); }, 50);
   }
 
-  private injectButton(candidate: InstructorCandidate): void {
-    const button = this.options.document.createElement("button");
-    button.type = "button";
-    button.className = "polyratings-view-button";
-    button.textContent = "View PolyRatings";
-    button.setAttribute("data-polyratings-instructor-name", candidate.instructorName);
-    button.setAttribute("aria-label", `View PolyRatings for ${candidate.displayName.replace(/\s+/g, " ").trim()}`);
-    button.setAttribute("data-polyratings-owned-button", "true");
-    button.addEventListener("click", () => {
-      const currentCandidate = candidate.element.matches("span.prof-name[data-name]")
-        ? createInstructorCandidate(candidate.element)
-        : candidate;
-      this.openDetails(currentCandidate);
-    });
-    candidate.element.append(" ", button);
+  private bindTarget(candidate: InstructorCandidate): void {
+    this.boundTargets.add(candidate.element);
+    candidate.element.setAttribute("data-polyratings-hover-target", "true");
+    if (!candidate.element.hasAttribute("tabindex")) candidate.element.tabIndex = 0;
+    candidate.element.setAttribute("aria-haspopup", "dialog");
+    candidate.element.setAttribute("aria-label", `View PolyRatings for ${candidate.displayName.replace(/\s+/g, " ").trim()}`);
+    candidate.element.addEventListener("pointerenter", () => this.scheduleShow(this.currentCandidate(candidate), true));
+    candidate.element.addEventListener("pointerleave", () => this.scheduleHide());
+    candidate.element.addEventListener("focus", () => this.show(this.currentCandidate(candidate)));
+    candidate.element.addEventListener("blur", () => this.scheduleHide());
+    candidate.element.addEventListener("click", () => this.show(this.currentCandidate(candidate)));
   }
 
-  private findExistingButton(candidate: InstructorCandidate): HTMLButtonElement | null {
-    const buttons = Array.from(candidate.element.querySelectorAll<HTMLButtonElement>("button[data-polyratings-owned-button]"));
-    const matchingName = buttons.find((button) => button.getAttribute("data-polyratings-instructor-name") === candidate.instructorName);
-    // A direct name node represents one instructor. Its one existing button is
-    // updated when Student Center changes that node's data-name attribute.
-    return matchingName ?? (candidate.element.matches("span.prof-name[data-name], [data-polyratings-instructor]") ? buttons[0] ?? null : null);
+  private currentCandidate(candidate: InstructorCandidate): InstructorCandidate {
+    return candidate.element.matches("span.prof-name[data-name]") ? createInstructorCandidate(candidate.element) : candidate;
   }
 
-  private updateButton(button: HTMLButtonElement, candidate: InstructorCandidate): void {
-    button.setAttribute("data-polyratings-instructor-name", candidate.instructorName);
-    button.setAttribute("aria-label", `View PolyRatings for ${candidate.displayName.replace(/\s+/g, " ").trim()}`);
+  private scheduleShow(candidate: InstructorCandidate, delayed: boolean): void {
+    this.cancelHide();
+    if (!delayed) return this.show(candidate);
+    if (this.activeCandidate?.element === candidate.element) return;
+    this.cancelShow();
+    this.showTimer = window.setTimeout(() => this.show(candidate), hoverDelayMs);
   }
 
-  private openDetails(candidate: InstructorCandidate): void {
-    const professor = this.options.useMockData
-      ? findConfidentProfessor(candidate.instructorName, this.options.professors)
-      : null;
-    const overlay = this.options.document.createElement("section");
-    overlay.className = "polyratings-overlay";
-    overlay.setAttribute("role", "dialog");
-    overlay.setAttribute("aria-modal", "true");
-    overlay.setAttribute("aria-label", "PolyRatings professor information");
-    overlay.tabIndex = -1;
+  private show(candidate: InstructorCandidate): void {
+    this.cancelShow();
+    this.cancelHide();
+    this.activeCandidate = candidate;
+    const host = this.ensureHoverHost();
+    const card = host.shadowRoot?.querySelector<HTMLElement>(".card");
+    if (!card) return;
+    this.renderCard(card, candidate);
+    const rect = candidate.element.getBoundingClientRect();
+    const cardWidth = 320;
+    host.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - cardWidth - 8))}px`;
+    host.style.top = `${Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 100))}px`;
+    host.hidden = false;
+  }
 
-    const panel = this.options.document.createElement("div");
-    panel.className = "polyratings-panel";
+  private scheduleHide(): void {
+    this.cancelShow();
+    this.cancelHide();
+    this.hideTimer = window.setTimeout(() => this.hide(), hideDelayMs);
+  }
+
+  private hide(): void {
+    this.cancelHide();
+    if (this.host) this.host.hidden = true;
+    this.activeCandidate = null;
+  }
+
+  private handleKeydown = (event: KeyboardEvent): void => {
+    if (event.key === "Escape") this.hide();
+  };
+
+  private clearTimers(): void { this.cancelShow(); this.cancelHide(); }
+  private cancelShow(): void { if (this.showTimer !== null) { window.clearTimeout(this.showTimer); this.showTimer = null; } }
+  private cancelHide(): void { if (this.hideTimer !== null) { window.clearTimeout(this.hideTimer); this.hideTimer = null; } }
+
+  private ensureHoverHost(): HTMLElement {
+    if (this.host?.isConnected) return this.host;
+    const host = this.options.document.createElement("div");
+    host.id = "polyratings-hover-host";
+    host.hidden = true;
+    host.style.cssText = "position:fixed;z-index:2147483647;max-width:calc(100vw - 16px);";
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML = `<style>:host{all:initial}.card{background:#f7f5ef;border:2px solid #d2a800;border-radius:10px;box-shadow:0 8px 24px rgb(0 0 0 / .22);box-sizing:border-box;color:#1e3932;font:14px/1.45 system-ui,sans-serif;max-height:70vh;overflow:auto;padding:14px;width:min(320px,calc(100vw - 16px))}h2{font-size:16px;margin:0 24px 4px 0}h3{font-size:13px;margin:12px 0 3px}p{margin:0}.meta{color:#53665e}.notice{color:#685300;font-size:12px;font-weight:700;margin-top:8px}.details{background:#1e5c44;border:0;border-radius:5px;color:white;cursor:pointer;font:700 12px system-ui,sans-serif;margin-top:12px;padding:7px 9px}.close{background:transparent;border:0;color:#1e5c44;cursor:pointer;float:right;font:700 12px system-ui,sans-serif;padding:0}.details:focus-visible,.close:focus-visible{outline:3px solid #d2a800;outline-offset:2px}</style><section class="card" role="dialog" aria-label="PolyRatings professor information"></section>`;
+    const card = shadow.querySelector<HTMLElement>(".card")!;
+    card.addEventListener("pointerenter", () => this.cancelHide());
+    card.addEventListener("pointerleave", () => this.scheduleHide());
+    this.options.document.body.append(host);
+    this.host = host;
+    return host;
+  }
+
+  private renderCard(card: HTMLElement, candidate: InstructorCandidate): void {
+    card.replaceChildren();
     const close = this.options.document.createElement("button");
+    close.className = "close";
     close.type = "button";
-    close.className = "polyratings-close-button";
     close.textContent = "Close";
-    close.addEventListener("click", () => overlay.remove());
-    panel.append(close);
-
-    if (professor) {
-      this.renderProfessor(panel, professor, candidate.courseCode);
-    } else {
+    close.addEventListener("click", () => this.hide());
+    card.append(close);
+    const professor = this.options.useMockData ? findConfidentProfessor(candidate.instructorName, this.options.professors) : null;
+    if (!professor) {
       const heading = this.options.document.createElement("h2");
-      heading.textContent = "No PolyRatings information available for this professor.";
-      const detail = this.options.document.createElement("p");
-      detail.textContent = "No confident match was found. No ratings or reviews have been substituted.";
-      panel.append(heading, detail);
+      heading.textContent = candidate.displayName;
+      const message = this.options.document.createElement("p");
+      message.textContent = "PolyRatings information is not available yet.";
+      card.append(heading, message);
+      return;
     }
 
-    overlay.append(panel);
-    this.options.document.body.append(overlay);
-    overlay.focus();
-  }
-
-  private renderProfessor(panel: HTMLElement, professor: Professor, courseCode: string | null): void {
     const reviews = professor.reviews ?? [];
     const insights = mockReviewSummaryService.getInsights(reviews);
     const heading = this.options.document.createElement("h2");
     heading.textContent = professor.name;
-    const context = this.options.document.createElement("p");
-    context.textContent = `${professor.department} · ${professor.overallRating.toFixed(1)} / 5 · ${professor.reviewCount} demo reviews${courseCode ? ` · ${courseCode}` : ""}`;
+    const meta = this.options.document.createElement("p");
+    meta.className = "meta";
+    meta.textContent = `${professor.overallRating.toFixed(1)} / 5 · ${professor.reviewCount} demo reviews`;
+    card.append(heading, meta);
+    for (const traitName of ["Workload", "Difficulty"]) {
+      const trait = professor.ratingTraits?.find((item) => item.name === traitName);
+      if (trait) this.appendSection(card, traitName, `${trait.score.toFixed(1)} / 5`);
+    }
+    this.appendSection(card, "Review Summary", insights.summary ?? "No reviews are available to summarize.");
     const disclosure = this.options.document.createElement("p");
-    disclosure.className = "polyratings-demo-disclosure";
+    disclosure.className = "notice";
     disclosure.textContent = "Demo data only — not live PolyRatings data.";
-    panel.append(heading, context, disclosure);
-
-    this.appendSection(panel, "Review Summary", insights.summary ?? "No reviews are available to summarize.");
-    this.appendSection(panel, "Common Review Themes", insights.themes.length ? insights.themes.join(" · ") : "Not enough review information for recurring themes.");
-    this.appendSection(panel, "Rating Traits", (professor.ratingTraits ?? []).map((trait) => `${trait.name}: ${trait.score.toFixed(1)} / 5`).join(" · ") || "No rating traits are available.");
-    this.appendSection(panel, "Student Reviews", reviews.length ? reviews.map((review) => `${review.courseCode}: ${review.text}`).join(" ") : "No individual reviews are available.");
+    const details = this.options.document.createElement("button");
+    details.className = "details";
+    details.type = "button";
+    details.textContent = "View Full Details";
+    details.addEventListener("click", () => this.openDetails(candidate));
+    card.append(disclosure, details);
   }
 
-  private appendSection(panel: HTMLElement, title: string, content: string): void {
+  private appendSection(card: HTMLElement, title: string, content: string): void {
     const heading = this.options.document.createElement("h3");
     heading.textContent = title;
     const paragraph = this.options.document.createElement("p");
     paragraph.textContent = content;
-    panel.append(heading, paragraph);
+    card.append(heading, paragraph);
   }
 
-  private injectStyles(): void {
-    if (this.options.document.querySelector("[data-polyratings-content-styles]")) return;
-    const style = this.options.document.createElement("style");
-    style.setAttribute("data-polyratings-content-styles", "true");
-    style.textContent = `.polyratings-view-button{background:#1e5c44;border:0;border-radius:4px;color:#fff;cursor:pointer;font:600 12px system-ui,sans-serif;margin:4px;padding:4px 7px}.polyratings-view-button:focus-visible,.polyratings-close-button:focus-visible{outline:3px solid #d2a800;outline-offset:2px}.polyratings-overlay{align-items:center;background:rgb(0 0 0 / .42);display:flex;inset:0;justify-content:center;position:fixed;z-index:2147483647}.polyratings-panel{background:#f7f5ef;border:3px solid #d2a800;border-radius:10px;color:#1e3932;max-height:85vh;max-width:470px;overflow:auto;padding:20px;width:calc(100% - 32px)}.polyratings-panel h2{font-size:20px;margin:0 0 6px}.polyratings-panel h3{font-size:15px;margin:16px 0 4px}.polyratings-panel p{font:14px/1.45 system-ui,sans-serif;margin:0}.polyratings-close-button{background:#1e5c44;border:0;border-radius:4px;color:#fff;cursor:pointer;float:right;font:600 13px system-ui,sans-serif;padding:6px 10px}.polyratings-demo-disclosure{color:#685300;font-weight:700;margin-top:8px!important}`;
-    this.options.document.head.append(style);
+  private openDetails(candidate: InstructorCandidate): void {
+    this.hide();
+    const professor = this.options.useMockData ? findConfidentProfessor(candidate.instructorName, this.options.professors) : null;
+    if (!professor) return;
+    // The fixture's full-details action shares the existing model and insight service;
+    // production cards never expose mock details for real instructors.
+    const overlay = this.options.document.createElement("section");
+    overlay.className = "polyratings-overlay";
+    overlay.style.cssText = "align-items:center;background:rgb(0 0 0 / .42);display:flex;inset:0;justify-content:center;position:fixed;z-index:2147483647;";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    const panel = this.options.document.createElement("div");
+    panel.className = "polyratings-panel";
+    panel.style.cssText = "background:#f7f5ef;border:3px solid #d2a800;border-radius:10px;color:#1e3932;max-width:470px;padding:20px;width:calc(100% - 32px);";
+    const close = this.options.document.createElement("button");
+    close.type = "button"; close.textContent = "Close"; close.addEventListener("click", () => overlay.remove());
+    const heading = this.options.document.createElement("h2"); heading.textContent = professor.name;
+    const content = this.options.document.createElement("p"); content.textContent = `Overall rating: ${professor.overallRating.toFixed(1)} / 5. ${mockReviewSummaryService.getInsights(professor.reviews ?? []).summary ?? ""}`;
+    panel.append(close, heading, content); overlay.append(panel); this.options.document.body.append(overlay);
   }
 }
 

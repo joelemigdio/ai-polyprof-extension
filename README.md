@@ -10,6 +10,7 @@ Manifest V3 foundation for a Cal Poly Student Center companion extension. The fi
 - Deterministic, clearly labeled review summaries and recurring-theme chips derived from mock review tags; no AI model or external API is used.
 - A Preferences view that stores characteristic importance and direction choices in `chrome.storage.local`; recommendation scoring is not implemented.
 - A Manifest V3 content-script foundation and fictional Student Center schedule fixture. Its mock-data overlay is test-only; see [Student Center adapter assumptions](docs/STUDENT_CENTER_ADAPTER_ASSUMPTIONS.md).
+- Shadow DOM hover cards for identified Student Center instructor nodes; actual Student Center instructors receive only a no-data card until an authorized ratings source exists.
 - Labelled mock data behind an interchangeable `ProfessorDataService` interface.
 - A future-ready `chrome.storage.local` preference-storage module; the preferences UI is not part of this milestone.
 

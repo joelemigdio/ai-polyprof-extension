@@ -20,3 +20,15 @@ Provide one or more authorized, redacted DOM captures from the relevant Student 
 - any pagination or virtual-list behavior that replaces the Section List.
 
 With that evidence, the `findInstructorCandidates` adapter can be extended with targeted, reviewed selectors. It must retain exact normalized-name matching and the no-data fallback; ambiguous matches must never show another professor's data.
+
+## Hover-card debugging checklist
+
+The content script uses a single Shadow DOM hover card. To debug an authorized live session, open Chrome DevTools on the Student Center tab and confirm:
+
+1. The URL starts with `https://cmsweb.pscs.calpoly.edu/psc/` and the unpacked extension is enabled for that site.
+2. `document.querySelectorAll('span.prof-name[data-name]').length` or the semantic Instructor `<dt>`/`<dd>` relationship returns the expected instructors.
+3. An identified name has `data-polyratings-hover-target="true"` and `tabindex="0"` after the page settles.
+4. `document.querySelector('#polyratings-hover-host')` exists after the content script loads; inspect its open shadow root for the card.
+5. After dynamic navigation or section expansion, wait briefly for the MutationObserver scan, then repeat the checks.
+
+Do not paste student data, authentication tokens, or private schedules into bug reports. Manual verification is still required before claiming live compatibility.

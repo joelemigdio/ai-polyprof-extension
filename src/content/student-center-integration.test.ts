@@ -25,7 +25,7 @@ function setFixture(markup: string): StudentCenterIntegration {
 
 afterEach(() => {
   document.documentElement.removeAttribute("data-polyratings-fixture");
-  document.head.querySelector("[data-polyratings-content-styles]")?.remove();
+  document.querySelector("#polyratings-hover-host")?.remove();
   vi.useRealTimers();
 });
 
@@ -55,29 +55,56 @@ describe("Student Center integration fixture", () => {
     expect(candidates.every((candidate) => candidate.sectionElement?.tagName === "LI")).toBe(true);
   });
 
-  it("adds a separate button for each explicitly separated instructor in one dd value", () => {
+  it("binds each explicitly separated instructor in one dd value without adding page buttons", () => {
     const integration = setFixture(`<div aria-label="Section List" role="group"><ul><li><dl><dt>Instructor</dt><dd>Dr. Ada Lovelace; Dr. Grace Hopper</dd></dl></li></ul></div>`);
-    expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(2);
-    expect(document.querySelectorAll<HTMLButtonElement>(".polyratings-view-button")[1].getAttribute("aria-label")).toContain("Dr. Grace Hopper");
+    expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(0);
+    expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(1);
     integration.stop();
   });
 
-  it("adds one accessible button per instructor, including wrapped and repeated names, without duplicates", () => {
+  it("binds accessible hover targets, including wrapped and repeated names, without duplicates", () => {
     const integration = setFixture(`<div aria-label="Section List" role="group"><li data-polyratings-course-row><strong data-polyratings-course-code>CSC 4880</strong><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada<br>Lovelace</span></li><li data-polyratings-course-row><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada Lovelace</span></li><li><span class="prof-name" data-name="professor no match">Professor No Match</span></li></div>`);
     integration.scan();
-    expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(3);
-    expect(document.querySelector(".polyratings-view-button")?.getAttribute("aria-label")).toContain("Dr. Ada Lovelace");
+    expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(3);
+    expect(document.querySelector("[data-polyratings-hover-target]")?.getAttribute("aria-label")).toContain("Dr. Ada Lovelace");
     integration.stop();
   });
 
-  it("opens matching details and a safe no-data state", () => {
+  it("opens the correct delayed hover card and keeps it open when the pointer enters the card", () => {
+    vi.useFakeTimers();
+    const integration = setFixture(`<div aria-label="Section List" role="group"><li><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada Lovelace</span></li></div>`);
+    const target = document.querySelector<HTMLElement>("[data-polyratings-hover-target]")!;
+    target.dispatchEvent(new Event("pointerenter"));
+    vi.advanceTimersByTime(249);
+    expect(document.querySelector<HTMLElement>("#polyratings-hover-host")?.hidden).toBe(true);
+    vi.advanceTimersByTime(1);
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    expect(host.hidden).toBe(false);
+    expect(host.shadowRoot?.textContent).toContain("Dr. Ada Lovelace");
+    target.dispatchEvent(new Event("pointerleave"));
+    host.shadowRoot?.querySelector(".card")?.dispatchEvent(new Event("pointerenter"));
+    vi.advanceTimersByTime(200);
+    expect(host.hidden).toBe(false);
+    host.shadowRoot?.querySelector(".card")?.dispatchEvent(new Event("pointerleave"));
+    vi.advanceTimersByTime(140);
+    expect(host.hidden).toBe(true);
+    integration.stop();
+  });
+
+  it("supports focus, click, Escape, full details, and a safe no-data card", () => {
     const integration = setFixture(`<div aria-label="Section List" role="group"><li data-polyratings-course-row><strong data-polyratings-course-code>CSC 4880</strong><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada Lovelace</span></li><li><span class="prof-name" data-name="professor no match">Professor No Match</span></li></div>`);
-    const buttons = document.querySelectorAll<HTMLButtonElement>(".polyratings-view-button");
-    buttons[0].click();
+    const targets = document.querySelectorAll<HTMLElement>("[data-polyratings-hover-target]");
+    targets[0].dispatchEvent(new Event("focus"));
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    expect(host.shadowRoot?.textContent).toContain("Review Summary");
+    host.shadowRoot?.querySelector<HTMLButtonElement>(".details")?.click();
     expect(document.querySelector(".polyratings-overlay")?.textContent).toContain("Dr. Ada Lovelace");
-    document.querySelector<HTMLButtonElement>(".polyratings-close-button")?.click();
-    buttons[1].click();
-    expect(document.querySelector(".polyratings-overlay")?.textContent).toContain("No PolyRatings information available");
+    document.querySelector(".polyratings-overlay")?.remove();
+    targets[1].click();
+    expect(host.shadowRoot?.textContent).toContain("Professor No Match");
+    expect(host.shadowRoot?.textContent).toContain("PolyRatings information is not available yet.");
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    expect(host.hidden).toBe(true);
     integration.stop();
   });
 
@@ -87,7 +114,7 @@ describe("Student Center integration fixture", () => {
     document.querySelector("[aria-label='Section List']")?.insertAdjacentHTML("beforeend", `<li><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada Lovelace</span></li>`);
     await Promise.resolve();
     vi.advanceTimersByTime(50);
-    expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(1);
+    expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(1);
     integration.stop();
   });
 
@@ -97,8 +124,8 @@ describe("Student Center integration fixture", () => {
     document.querySelector("ul")?.insertAdjacentHTML("beforeend", `<li><dl><dt>Instructor</dt><dd>Dr. Grace Hopper</dd></dl></li>`);
     await Promise.resolve();
     vi.advanceTimersByTime(50);
-    expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(1);
-    expect(document.querySelector(".polyratings-view-button")?.getAttribute("aria-label")).toContain("Dr. Grace Hopper");
+    expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(1);
+    expect(document.querySelector("[data-polyratings-hover-target]")?.getAttribute("aria-label")).toContain("Dr. Grace Hopper");
     integration.stop();
   });
 });
