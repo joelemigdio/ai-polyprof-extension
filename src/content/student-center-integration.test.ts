@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Professor } from "../models/professor";
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
+import { findInstructorCandidates } from "./student-center-adapter";
 import { StudentCenterIntegration } from "./student-center-integration";
 
 const professor: Professor = {
@@ -40,16 +41,23 @@ describe("professor detection", () => {
 });
 
 describe("Student Center integration fixture", () => {
-  it("adds one accessible button per instructor, including wrapped names, without duplicates", () => {
-    const integration = setFixture(`<section data-polyratings-course-row><strong data-polyratings-course-code>CSC 4880</strong><span data-polyratings-instructor>Dr. Ada<br>Lovelace</span></section><section data-polyratings-course-row><span data-polyratings-instructor>Professor No Match</span></section>`);
+  it("detects observed prof-name data attributes and associates the nearest semantic section", () => {
+    document.body.innerHTML = `<div aria-label="Section List" role="group"><li><span class="prof-name" data-name="DR. Ada Lovelace">Displayed Name</span><span class="prof-name" data-name="Dr. Grace Hopper">Grace</span></li></div>`;
+    const candidates = findInstructorCandidates(document);
+    expect(candidates.map((candidate) => candidate.instructorName)).toEqual(["DR. Ada Lovelace", "Dr. Grace Hopper"]);
+    expect(candidates[0].sectionElement?.tagName).toBe("LI");
+  });
+
+  it("adds one accessible button per instructor, including wrapped and repeated names, without duplicates", () => {
+    const integration = setFixture(`<div aria-label="Section List" role="group"><li data-polyratings-course-row><strong data-polyratings-course-code>CSC 4880</strong><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada<br>Lovelace</span></li><li data-polyratings-course-row><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada Lovelace</span></li><li><span class="prof-name" data-name="professor no match">Professor No Match</span></li></div>`);
     integration.scan();
-    expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(2);
+    expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(3);
     expect(document.querySelector(".polyratings-view-button")?.getAttribute("aria-label")).toContain("Dr. Ada Lovelace");
     integration.stop();
   });
 
   it("opens matching details and a safe no-data state", () => {
-    const integration = setFixture(`<section data-polyratings-course-row><strong data-polyratings-course-code>CSC 4880</strong><span data-polyratings-instructor>Dr. Ada Lovelace</span></section><section data-polyratings-course-row><span data-polyratings-instructor>Professor No Match</span></section>`);
+    const integration = setFixture(`<div aria-label="Section List" role="group"><li data-polyratings-course-row><strong data-polyratings-course-code>CSC 4880</strong><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada Lovelace</span></li><li><span class="prof-name" data-name="professor no match">Professor No Match</span></li></div>`);
     const buttons = document.querySelectorAll<HTMLButtonElement>(".polyratings-view-button");
     buttons[0].click();
     expect(document.querySelector(".polyratings-overlay")?.textContent).toContain("Dr. Ada Lovelace");
@@ -61,8 +69,8 @@ describe("Student Center integration fixture", () => {
 
   it("detects dynamically inserted course rows", async () => {
     vi.useFakeTimers();
-    const integration = setFixture("<main></main>");
-    document.querySelector("main")?.insertAdjacentHTML("beforeend", `<section data-polyratings-course-row><span data-polyratings-instructor>Dr. Ada Lovelace</span></section>`);
+    const integration = setFixture("<div aria-label=\"Section List\" role=\"group\"></div>");
+    document.querySelector("[aria-label='Section List']")?.insertAdjacentHTML("beforeend", `<li><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada Lovelace</span></li>`);
     await Promise.resolve();
     vi.advanceTimersByTime(50);
     expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(1);

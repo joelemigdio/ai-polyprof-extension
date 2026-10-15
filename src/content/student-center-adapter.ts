@@ -1,6 +1,8 @@
 export interface InstructorCandidate {
   element: HTMLElement;
+  sectionElement: HTMLElement | null;
   instructorName: string;
+  displayName: string;
   courseCode: string | null;
 }
 
@@ -15,21 +17,35 @@ function extractInstructorText(element: HTMLElement): string {
   return text;
 }
 
+function findSectionContainer(element: HTMLElement): HTMLElement | null {
+  const sectionList = element.closest<HTMLElement>("[role='group'][aria-label='Section List']");
+  const listItem = element.closest<HTMLElement>("li");
+  if (sectionList && listItem && sectionList.contains(listItem)) return listItem;
+  return element.closest<HTMLElement>("[data-polyratings-course-row]");
+}
+
+export function createInstructorCandidate(element: HTMLElement): InstructorCandidate {
+  const sectionElement = findSectionContainer(element);
+  const courseElement = sectionElement?.querySelector<HTMLElement>("[data-polyratings-course-code]");
+  const displayName = extractInstructorText(element);
+  const normalizedAttributeName = element.getAttribute("data-name")?.trim();
+  return {
+    element,
+    sectionElement,
+    // data-name is the observed, normalized PeopleSoft value; text is a safe fallback.
+    instructorName: normalizedAttributeName || displayName,
+    displayName: displayName || normalizedAttributeName || "Instructor",
+    courseCode: courseElement?.textContent?.replace(/\s+/g, " ").trim() ?? null,
+  };
+}
+
 /**
- * Deliberately conservative adapter. The data attributes are provided by the
- * local fixture; production PeopleSoft selectors must be added only after DOM
- * evidence is captured from an authorized Student Center session.
+ * Uses the verified PeopleSoft professor contract first. Fixture markers remain
+ * supported for isolated tests without broad page-text scraping.
  */
 export function findInstructorCandidates(root: ParentNode = document): InstructorCandidate[] {
-  return Array.from(root.querySelectorAll<HTMLElement>("[data-polyratings-instructor]"))
-    .map((element) => {
-      const row = element.closest<HTMLElement>("[data-polyratings-course-row]");
-      const courseElement = row?.querySelector<HTMLElement>("[data-polyratings-course-code]");
-      return {
-        element,
-        instructorName: extractInstructorText(element),
-        courseCode: courseElement?.textContent?.replace(/\s+/g, " ").trim() ?? null,
-      };
-    })
+  const elements = Array.from(root.querySelectorAll<HTMLElement>("span.prof-name[data-name], [data-polyratings-instructor]"));
+  return [...new Set(elements)]
+    .map(createInstructorCandidate)
     .filter((candidate) => candidate.instructorName.trim().length > 0);
 }

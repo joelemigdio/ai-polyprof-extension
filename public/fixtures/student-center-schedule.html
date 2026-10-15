@@ -5,19 +5,21 @@
     <main>
       <h1>My Schedule — Test Fixture</h1>
       <p>Fictional data for extension testing only.</p>
-      <section data-polyratings-course-row>
+      <div aria-label="Section List" role="group">
+      <li data-polyratings-course-row>
         <strong data-polyratings-course-code>CSC 4880</strong> <span>S01-LEC (3287) · Artificial Intelligence</span>
-        <p>Instructor: <span data-polyratings-instructor>Dr. Ada<br />Lovelace</span></p>
+        <p>Instructor: <span class="prof-name" data-name="dr. ada lovelace">Dr. Ada<br />Lovelace</span></p>
         <p>MoWeFr · 8:00 AM–8:50 AM</p>
-      </section>
-      <section data-polyratings-course-row>
+      </li>
+      <li data-polyratings-course-row>
         <strong data-polyratings-course-code>CSC 4880</strong> <span>S02-LAB (3288)</span>
-        <p>Instructor: <span data-polyratings-instructor>Dr. Grace Hopper</span></p>
-      </section>
-      <section data-polyratings-course-row>
+        <p>Instructors: <span class="prof-name" data-name="dr. grace hopper">Dr. Grace Hopper</span> and <span class="prof-name" data-name="dr. ada lovelace">Dr. Ada Lovelace</span></p>
+      </li>
+      <li data-polyratings-course-row>
         <strong data-polyratings-course-code>CSC 101</strong>
-        <p>Instructor: <span data-polyratings-instructor>Professor No Match</span></p>
-      </section>
+        <p>Instructor: <span class="prof-name" data-name="professor no match">Professor No Match</span></p>
+      </li>
+      </div>
     </main>
   </body>
 </html>

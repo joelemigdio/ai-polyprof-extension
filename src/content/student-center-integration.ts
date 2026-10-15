@@ -1,7 +1,7 @@
 import type { Professor } from "../models/professor";
 import { mockReviewSummaryService } from "../services/mock-review-summary-service";
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
-import { findInstructorCandidates, type InstructorCandidate } from "./student-center-adapter";
+import { createInstructorCandidate, findInstructorCandidates, type InstructorCandidate } from "./student-center-adapter";
 
 const injectedMarker = "data-polyratings-button-injected";
 
@@ -21,7 +21,12 @@ export class StudentCenterIntegration {
     this.injectStyles();
     this.scan();
     this.observer = new MutationObserver(() => this.queueScan());
-    this.observer.observe(this.options.document.body, { childList: true, subtree: true });
+    this.observer.observe(this.options.document.body, {
+      attributes: true,
+      attributeFilter: ["data-name"],
+      childList: true,
+      subtree: true,
+    });
   }
 
   stop(): void {
@@ -31,6 +36,7 @@ export class StudentCenterIntegration {
   scan(): void {
     for (const candidate of findInstructorCandidates(this.options.document)) {
       if (!candidate.element.hasAttribute(injectedMarker)) this.injectButton(candidate);
+      else this.updateButton(candidate);
     }
   }
 
@@ -49,9 +55,15 @@ export class StudentCenterIntegration {
     button.type = "button";
     button.className = "polyratings-view-button";
     button.textContent = "View PolyRatings";
-    button.setAttribute("aria-label", `View PolyRatings for ${candidate.instructorName.replace(/\s+/g, " ").trim()}`);
-    button.addEventListener("click", () => this.openDetails(candidate));
+    button.setAttribute("aria-label", `View PolyRatings for ${candidate.displayName.replace(/\s+/g, " ").trim()}`);
+    button.setAttribute("data-polyratings-owned-button", "true");
+    button.addEventListener("click", () => this.openDetails(createInstructorCandidate(candidate.element)));
     candidate.element.append(" ", button);
+  }
+
+  private updateButton(candidate: InstructorCandidate): void {
+    const button = candidate.element.querySelector<HTMLButtonElement>("button[data-polyratings-owned-button]");
+    if (button) button.setAttribute("aria-label", `View PolyRatings for ${candidate.displayName.replace(/\s+/g, " ").trim()}`);
   }
 
   private openDetails(candidate: InstructorCandidate): void {
