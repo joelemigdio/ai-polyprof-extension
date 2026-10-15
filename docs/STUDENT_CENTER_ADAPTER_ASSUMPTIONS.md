@@ -4,7 +4,7 @@ The extension content script is scoped to `https://cmsweb.pscs.calpoly.edu/psc/*
 
 ## What is verified
 
-The adapter has verified DOM evidence for `span.prof-name[data-name]` and the semantic `[role="group"][aria-label="Section List"]` container. It reads `data-name` first, falls back to rendered text, and uses the nearest list item beneath the Section List as its section container. The fictional fixture at `public/fixtures/student-center-schedule.html` mirrors those observed structures. Automated tests cover wrapped names, multiple instructors, repeated names, duplicate prevention, dynamic insertion, name ambiguity, matching demo details, and a no-data state.
+The adapter has verified DOM evidence for `span.prof-name[data-name]` and the semantic `[role="group"][aria-label="Section List"]` container. It also supports Schedule Builder's semantic definition-list form: it selects only a `<dd>` associated with a `<dt>` whose label normalizes to `Instructor`. It reads `data-name` first, falls back to rendered text, and uses the nearest list item beneath the Section List as its section container. The fictional fixture at `public/fixtures/student-center-schedule.html` mirrors both structures. Automated tests cover wrapped names, multiple instructors, repeated names, duplicate prevention, dynamic insertion, name ambiguity, matching demo details, and a no-data state.
 
 ## What is intentionally not assumed
 

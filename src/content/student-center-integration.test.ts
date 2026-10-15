@@ -48,6 +48,20 @@ describe("Student Center integration fixture", () => {
     expect(candidates[0].sectionElement?.tagName).toBe("LI");
   });
 
+  it("detects only dd values paired with an Instructor dt, including explicit multiple instructors", () => {
+    document.body.innerHTML = `<div aria-label="Section List" role="group"><ul><li><dl><dt>Units</dt><dd>4</dd><dt> Instructor </dt><dd>Dr. Ada Lovelace; Dr. Grace Hopper</dd></dl></li></ul></div>`;
+    const candidates = findInstructorCandidates(document);
+    expect(candidates.map((candidate) => candidate.instructorName)).toEqual(["Dr. Ada Lovelace", "Dr. Grace Hopper"]);
+    expect(candidates.every((candidate) => candidate.sectionElement?.tagName === "LI")).toBe(true);
+  });
+
+  it("adds a separate button for each explicitly separated instructor in one dd value", () => {
+    const integration = setFixture(`<div aria-label="Section List" role="group"><ul><li><dl><dt>Instructor</dt><dd>Dr. Ada Lovelace; Dr. Grace Hopper</dd></dl></li></ul></div>`);
+    expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(2);
+    expect(document.querySelectorAll<HTMLButtonElement>(".polyratings-view-button")[1].getAttribute("aria-label")).toContain("Dr. Grace Hopper");
+    integration.stop();
+  });
+
   it("adds one accessible button per instructor, including wrapped and repeated names, without duplicates", () => {
     const integration = setFixture(`<div aria-label="Section List" role="group"><li data-polyratings-course-row><strong data-polyratings-course-code>CSC 4880</strong><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada<br>Lovelace</span></li><li data-polyratings-course-row><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada Lovelace</span></li><li><span class="prof-name" data-name="professor no match">Professor No Match</span></li></div>`);
     integration.scan();
@@ -74,6 +88,17 @@ describe("Student Center integration fixture", () => {
     await Promise.resolve();
     vi.advanceTimersByTime(50);
     expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(1);
+    integration.stop();
+  });
+
+  it("detects dynamically inserted Schedule Builder Instructor fields", async () => {
+    vi.useFakeTimers();
+    const integration = setFixture("<div aria-label=\"Section List\" role=\"group\"><ul></ul></div>");
+    document.querySelector("ul")?.insertAdjacentHTML("beforeend", `<li><dl><dt>Instructor</dt><dd>Dr. Grace Hopper</dd></dl></li>`);
+    await Promise.resolve();
+    vi.advanceTimersByTime(50);
+    expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(1);
+    expect(document.querySelector(".polyratings-view-button")?.getAttribute("aria-label")).toContain("Dr. Grace Hopper");
     integration.stop();
   });
 });

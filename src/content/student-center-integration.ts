@@ -3,8 +3,6 @@ import { mockReviewSummaryService } from "../services/mock-review-summary-servic
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
 import { createInstructorCandidate, findInstructorCandidates, type InstructorCandidate } from "./student-center-adapter";
 
-const injectedMarker = "data-polyratings-button-injected";
-
 export interface StudentCenterIntegrationOptions {
   document: Document;
   professors: Professor[];
@@ -35,8 +33,9 @@ export class StudentCenterIntegration {
 
   scan(): void {
     for (const candidate of findInstructorCandidates(this.options.document)) {
-      if (!candidate.element.hasAttribute(injectedMarker)) this.injectButton(candidate);
-      else this.updateButton(candidate);
+      const button = this.findExistingButton(candidate);
+      if (button) this.updateButton(button, candidate);
+      else this.injectButton(candidate);
     }
   }
 
@@ -50,20 +49,33 @@ export class StudentCenterIntegration {
   }
 
   private injectButton(candidate: InstructorCandidate): void {
-    candidate.element.setAttribute(injectedMarker, "true");
     const button = this.options.document.createElement("button");
     button.type = "button";
     button.className = "polyratings-view-button";
     button.textContent = "View PolyRatings";
+    button.setAttribute("data-polyratings-instructor-name", candidate.instructorName);
     button.setAttribute("aria-label", `View PolyRatings for ${candidate.displayName.replace(/\s+/g, " ").trim()}`);
     button.setAttribute("data-polyratings-owned-button", "true");
-    button.addEventListener("click", () => this.openDetails(createInstructorCandidate(candidate.element)));
+    button.addEventListener("click", () => {
+      const currentCandidate = candidate.element.matches("span.prof-name[data-name]")
+        ? createInstructorCandidate(candidate.element)
+        : candidate;
+      this.openDetails(currentCandidate);
+    });
     candidate.element.append(" ", button);
   }
 
-  private updateButton(candidate: InstructorCandidate): void {
-    const button = candidate.element.querySelector<HTMLButtonElement>("button[data-polyratings-owned-button]");
-    if (button) button.setAttribute("aria-label", `View PolyRatings for ${candidate.displayName.replace(/\s+/g, " ").trim()}`);
+  private findExistingButton(candidate: InstructorCandidate): HTMLButtonElement | null {
+    const buttons = Array.from(candidate.element.querySelectorAll<HTMLButtonElement>("button[data-polyratings-owned-button]"));
+    const matchingName = buttons.find((button) => button.getAttribute("data-polyratings-instructor-name") === candidate.instructorName);
+    // A direct name node represents one instructor. Its one existing button is
+    // updated when Student Center changes that node's data-name attribute.
+    return matchingName ?? (candidate.element.matches("span.prof-name[data-name], [data-polyratings-instructor]") ? buttons[0] ?? null : null);
+  }
+
+  private updateButton(button: HTMLButtonElement, candidate: InstructorCandidate): void {
+    button.setAttribute("data-polyratings-instructor-name", candidate.instructorName);
+    button.setAttribute("aria-label", `View PolyRatings for ${candidate.displayName.replace(/\s+/g, " ").trim()}`);
   }
 
   private openDetails(candidate: InstructorCandidate): void {
