@@ -6,8 +6,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
-    "test": "tsc --noEmit",
+    "build": "npm run typecheck && vite build && vite build --config vite.content.config.ts",
+    "test": "npm run typecheck && vitest run",
+    "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -20,6 +21,8 @@
     "@types/chrome": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "jsdom": "latest",
     "typescript": "latest"
+    ,"vitest": "latest"
   }
 }

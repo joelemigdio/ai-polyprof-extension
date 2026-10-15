@@ -8,4 +8,12 @@
     "default_popup": "index.html"
   },
   "permissions": ["storage"]
+  ,"host_permissions": ["https://cmsweb.pscs.calpoly.edu/psc/*"]
+  ,"content_scripts": [
+    {
+      "matches": ["https://cmsweb.pscs.calpoly.edu/psc/*"],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ]
 }
