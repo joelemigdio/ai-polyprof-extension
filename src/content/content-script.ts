@@ -1,18 +1,32 @@
 import { mockProfessorDataService } from "../services/mock-professor-data-service";
+import { loadPreferences, normalizePreferences } from "../services/preference-storage";
 import { DevelopmentDiagnostics, ENABLE_DEVELOPMENT_DIAGNOSTICS } from "./development-diagnostics";
-import { isFixtureDocument, StudentCenterIntegration } from "./student-center-integration";
+import { StudentCenterIntegration } from "./student-center-integration";
 
 async function bootstrap(): Promise<void> {
   const diagnostics = ENABLE_DEVELOPMENT_DIAGNOSTICS ? new DevelopmentDiagnostics(document) : undefined;
   try {
-    const professors = await mockProfessorDataService.getProfessorResults();
-    new StudentCenterIntegration({
+    const [professors, preferences] = await Promise.all([
+      mockProfessorDataService.getProfessorResults(),
+      loadPreferences(),
+    ]);
+
+    const integration = new StudentCenterIntegration({
       document,
       professors,
+      preferences,
       diagnostics,
-      // Real Student Center instructors must never receive mock ratings.
-      useMockData: isFixtureDocument(document),
-    }).start();
+      // Demo ratings are shown for matched instructors so the alpha is usable on
+      // the real portal; every card carries the "Demo data" banner. Set this back
+      // to isFixtureDocument(document) before any student-facing release.
+      useMockData: true,
+    });
+    integration.start();
+
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== "local" || !changes.studentPreferences) return;
+      integration.updatePreferences(normalizePreferences(changes.studentPreferences.newValue));
+    });
   } catch {
     diagnostics?.renderingError();
   }

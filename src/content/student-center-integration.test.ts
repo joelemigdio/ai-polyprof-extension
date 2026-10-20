@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Professor } from "../models/professor";
+import { createDefaultPreferences } from "../models/preferences";
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
 import { findInstructorCandidates, findInstructorDetection } from "./student-center-adapter";
 import { StudentCenterIntegration } from "./student-center-integration";
@@ -9,10 +10,13 @@ const professor: Professor = {
   id: "fixture-ada",
   name: "Dr. Ada Lovelace",
   department: "Computer Science",
-  overallRating: 4.6,
+  courses: ["CSC 4880"],
+  starRating: 4.6,
+  peerRating: 4.4,
   reviewCount: 2,
-  ratingTraits: [{ name: "Clarity", score: 4.7 }],
-  reviews: [{ id: "review-1", courseCode: "CSC 4880", submittedAt: "2026-01-01", rating: 5, text: "Clear lectures.", tags: ["Clear lectures"] }],
+  traits: ["project-heavy", "clear-grading"],
+  weakTraits: [],
+  reviews: [{ id: "review-1", courseCode: "CSC 4880", classYear: "Senior", rating: 5, text: "Clear lectures." }],
 };
 
 function setFixture(markup: string): StudentCenterIntegration {
@@ -138,20 +142,52 @@ describe("Student Center integration fixture", () => {
     integration.stop();
   });
 
-  it("supports focus, click, Escape, full details, and a safe no-data card", () => {
+  it("supports focus, drill-in to details, Escape, and a safe no-data row", () => {
     const integration = setFixture(`<div aria-label="Section List" role="group"><li data-polyratings-course-row><strong data-polyratings-course-code>CSC 4880</strong><span class="prof-name" data-name="dr. ada lovelace">Dr. Ada Lovelace</span></li><li><span class="prof-name" data-name="professor no match">Professor No Match</span></li></div>`);
     const targets = document.querySelectorAll<HTMLElement>("[data-polyratings-hover-target]");
     targets[0].dispatchEvent(new Event("focus"));
     const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
-    expect(host.shadowRoot?.textContent).toContain("Review Summary");
-    host.shadowRoot?.querySelector<HTMLButtonElement>(".details")?.click();
-    expect(document.querySelector(".polyratings-overlay")?.textContent).toContain("Dr. Ada Lovelace");
-    document.querySelector(".polyratings-overlay")?.remove();
+    expect(host.shadowRoot?.textContent).toContain("Personalized summary");
+
+    host.shadowRoot?.querySelector<HTMLButtonElement>(".prof")?.click();
+    expect(host.shadowRoot?.textContent).toContain("Top reviews");
+    expect(host.shadowRoot?.textContent).toContain("Clear lectures.");
+
+    host.shadowRoot?.querySelector<HTMLButtonElement>(".back")?.click();
+    expect(host.shadowRoot?.textContent).toContain("Personalized summary");
+
     targets[1].click();
     expect(host.shadowRoot?.textContent).toContain("Professor No Match");
-    expect(host.shadowRoot?.textContent).toContain("PolyRatings information is not available yet.");
+    expect(host.shadowRoot?.textContent).toContain("no ratings available yet");
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
     expect(host.hidden).toBe(true);
+    integration.stop();
+  });
+
+  it("lists every professor teaching one class and re-renders when preferences change", () => {
+    const second: Professor = {
+      ...professor,
+      id: "fixture-grace",
+      name: "Dr. Grace Hopper",
+      traits: ["labs"],
+    };
+    document.documentElement.setAttribute("data-polyratings-fixture", "");
+    document.body.innerHTML = `<div aria-label="Section List" role="group"><li data-polyratings-course-row><strong data-polyratings-course-code>CSC 430</strong><dl><dt>Instructor</dt><dd>Dr. Ada Lovelace; Dr. Grace Hopper</dd></dl></li></div>`;
+    const integration = new StudentCenterIntegration({
+      document,
+      professors: [professor, second],
+      useMockData: true,
+      preferences: { ...createDefaultPreferences(), learningStyles: ["project-heavy"] },
+    });
+    integration.start();
+
+    document.querySelector<HTMLElement>("[data-polyratings-hover-target]")!.click();
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    expect(host.shadowRoot?.querySelectorAll(".prof")).toHaveLength(2);
+    expect(host.shadowRoot?.textContent).toContain("Dr. Ada Lovelace fits best");
+
+    integration.updatePreferences({ ...createDefaultPreferences(), learningStyles: ["labs"] });
+    expect(host.shadowRoot?.textContent).toContain("Dr. Grace Hopper fits best");
     integration.stop();
   });
 

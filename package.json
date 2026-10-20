@@ -1,8 +1,8 @@
 {
-  "name": "ai-polyratings-extension",
-  "version": "0.1.0",
+  "name": "polyprof-extension",
+  "version": "0.3.0",
   "private": true,
-  "description": "Manifest V3 foundation for the AI PolyRatings Chrome extension.",
+  "description": "PolyProf: a Cal Poly course-registration companion for comparing professors.",
   "type": "module",
   "scripts": {
     "dev": "vite",

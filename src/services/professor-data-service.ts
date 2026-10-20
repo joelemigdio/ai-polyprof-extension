@@ -1,4 +1,4 @@
-import type { Professor } from "../models/professor";
+import type { CourseOffering, Professor } from "../models/professor";
 
 /**
  * Boundary for professor data. Replace the mock implementation only after an
@@ -6,4 +6,5 @@ import type { Professor } from "../models/professor";
  */
 export interface ProfessorDataService {
   getProfessorResults(): Promise<Professor[]>;
+  getCourseOfferings(): Promise<CourseOffering[]>;
 }

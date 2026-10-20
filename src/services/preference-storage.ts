@@ -1,4 +1,13 @@
-import { createDefaultPreferences, preferenceDefinitions, type StudentPreferences } from "../models/preferences";
+import {
+  classTimeOptions,
+  createDefaultPreferences,
+  departmentOptions,
+  traitDefinitions,
+  type ClassTime,
+  type DepartmentCode,
+  type StudentPreferences,
+  type TraitKey,
+} from "../models/preferences";
 
 const storageKey = "studentPreferences";
 
@@ -17,24 +26,25 @@ export async function resetPreferences(): Promise<StudentPreferences> {
   return defaults;
 }
 
-/** Safely restores missing or legacy stored fields to current defaults. */
+function keepKnown<T extends string>(value: unknown, allowed: ReadonlyArray<T>): T[] | null {
+  if (!Array.isArray(value)) return null;
+  return value.filter((item): item is T => typeof item === "string" && allowed.includes(item as T));
+}
+
+/** Drops unknown or legacy stored values rather than failing to load. */
 export function normalizePreferences(value: unknown): StudentPreferences {
   const defaults = createDefaultPreferences();
   if (!value || typeof value !== "object") return defaults;
-  const storedCharacteristics = (value as Partial<StudentPreferences>).characteristics;
-  if (!storedCharacteristics || typeof storedCharacteristics !== "object") return defaults;
 
-  for (const definition of preferenceDefinitions) {
-    const stored = storedCharacteristics[definition.key];
-    if (!stored || typeof stored !== "object") continue;
-    const candidate = stored as Partial<StudentPreferences["characteristics"][typeof definition.key]>;
-    if (typeof candidate.importance === "string") defaults.characteristics[definition.key].importance = candidate.importance;
-    if (definition.directions && typeof candidate.preferredDirection === "string") {
-      const allowedDirections = definition.directions.map((direction) => direction.value);
-      if (allowedDirections.includes(candidate.preferredDirection as never)) {
-        defaults.characteristics[definition.key].preferredDirection = candidate.preferredDirection;
-      }
-    }
-  }
-  return defaults;
+  const stored = value as Partial<StudentPreferences>;
+  const departments = keepKnown<DepartmentCode>(stored.departments, departmentOptions);
+  const classTimes = keepKnown<ClassTime>(stored.classTimes, classTimeOptions.map((option) => option.value));
+  const learningStyles = keepKnown<TraitKey>(stored.learningStyles, traitDefinitions.map((trait) => trait.key));
+
+  return {
+    version: 2,
+    departments: departments ?? defaults.departments,
+    classTimes: classTimes ?? defaults.classTimes,
+    learningStyles: learningStyles ?? defaults.learningStyles,
+  };
 }

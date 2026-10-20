@@ -1,31 +1,35 @@
-export type RatingTraitName =
-  | "Difficulty"
-  | "Workload"
-  | "Teaching quality"
-  | "Flexibility"
-  | "Attendance"
-  | "Clarity";
+import type { TraitKey } from "./preferences";
 
-export interface RatingTrait {
-  name: RatingTraitName;
-  score: number;
-}
+export type ClassYear = "Freshman" | "Sophomore" | "Junior" | "Senior" | "Graduate";
 
 export interface ProfessorReview {
   id: string;
   courseCode: string;
-  submittedAt: string;
+  classYear: ClassYear;
   rating: number;
   text: string;
-  tags?: string[];
 }
 
 export interface Professor {
   id: string;
   name: string;
   department: string;
-  overallRating: number;
+  courses: string[];
+  /** Overall PolyRatings-style score shown in the cream star pill. */
+  starRating: number;
+  /** Aggregate score from students with a similar academic background. */
+  peerRating: number;
   reviewCount: number;
-  ratingTraits?: RatingTrait[];
-  reviews?: ProfessorReview[];
+  traits: TraitKey[];
+  /** Traits students consistently report this professor is weak on. */
+  weakTraits: TraitKey[];
+  reviews: ProfessorReview[];
+}
+
+export interface CourseOffering {
+  code: string;
+  title: string;
+  department: string;
+  term: string;
+  professorIds: string[];
 }

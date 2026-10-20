@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "AI PolyRatings",
-  "version": "0.1.0",
-  "description": "A course-registration companion for comparing professor information.",
+  "name": "PolyProf",
+  "version": "0.3.0",
+  "description": "Compare Cal Poly professors by rating, similar-student feedback, and your own learning-style preferences.",
   "action": {
-    "default_title": "AI PolyRatings",
+    "default_title": "PolyProf",
     "default_popup": "index.html"
   },
-  "permissions": ["storage"]
-  ,"host_permissions": ["https://cmsweb.pscs.calpoly.edu/psc/*"]
-  ,"content_scripts": [
+  "permissions": ["storage"],
+  "host_permissions": ["https://cmsweb.pscs.calpoly.edu/psc/*"],
+  "content_scripts": [
     {
       "matches": ["https://cmsweb.pscs.calpoly.edu/psc/*"],
       "js": ["content-script.js"],

@@ -146,6 +146,52 @@ function countUniqueTargets(candidates: InstructorCandidate[], source: Instructo
   return new Set(candidates.filter((candidate) => candidate.source === source).map((candidate) => candidate.element)).size;
 }
 
+export interface RowInstructor {
+  /** Canonical value used for matching. */
+  instructorName: string;
+  /** Value shown to the student when no rating match exists. */
+  displayName: string;
+}
+
+export interface ClassRow {
+  /** The element hover is bound to: the section row when one exists. */
+  element: HTMLElement;
+  courseCode: string | null;
+  instructors: RowInstructor[];
+}
+
+/**
+ * Groups already-detected instructors by their section so hovering a class
+ * surfaces every professor teaching it. Instructors outside a recognizable
+ * section keep their own row rather than being dropped.
+ */
+export function groupCandidatesIntoRows(candidates: InstructorCandidate[]): ClassRow[] {
+  const rows = new Map<HTMLElement, ClassRow>();
+
+  for (const candidate of candidates) {
+    const element = candidate.sectionElement ?? candidate.element;
+    const instructor: RowInstructor = {
+      instructorName: candidate.instructorName,
+      displayName: candidate.displayName.replace(/\s+/g, " ").trim(),
+    };
+    const existing = rows.get(element);
+    if (existing) {
+      if (!existing.instructors.some((item) => item.instructorName === instructor.instructorName)) {
+        existing.instructors.push(instructor);
+      }
+      existing.courseCode ??= candidate.courseCode;
+      continue;
+    }
+    rows.set(element, { element, courseCode: candidate.courseCode, instructors: [instructor] });
+  }
+
+  return [...rows.values()];
+}
+
+export function findClassRows(root: ParentNode = document): ClassRow[] {
+  return groupCandidatesIntoRows(findInstructorCandidates(root));
+}
+
 /**
  * Uses the verified PeopleSoft professor contract first. Fixture markers remain
  * supported for isolated tests without broad page-text scraping.

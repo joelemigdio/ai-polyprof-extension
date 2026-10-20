@@ -1,31 +1,50 @@
-# AI PolyRatings Chrome Extension
+# PolyProf Chrome Extension
 
-Manifest V3 foundation for a Cal Poly Student Center companion extension. The first milestone intentionally implements only the **Professor Results** view using clearly labeled demonstration data. It does not call PolyRatings, scrape Student Center, use real professor ratings, or include API keys.
+A Manifest V3 companion extension for Cal Poly students comparing professors during registration. It works on two surfaces: an in-page hover card on the Student Center portal, and a four-screen popup built from the Figma handoff. All ratings are clearly labeled demonstration data. The extension makes no network requests, does not call PolyRatings, does not read schedule records, and contains no API keys.
 
 ## Current functionality
 
-- Manifest V3 popup that confirms the extension is running.
-- Compact Professor Results cards with name, overall rating, review count, and numerical rating traits.
-- A Professor Details view with professor context, numerical trait scores, individual mock reviews, review ratings/tags, and Back navigation.
-- Deterministic, clearly labeled review summaries and recurring-theme chips derived from mock review tags; no AI model or external API is used.
-- A Preferences view that stores characteristic importance and direction choices in `chrome.storage.local`; recommendation scoring is not implemented.
-- A Manifest V3 content-script foundation and fictional Student Center schedule fixture. Its mock-data overlay is test-only; see [Student Center adapter assumptions](docs/STUDENT_CENTER_ADAPTER_ASSUMPTIONS.md).
-- Shadow DOM hover cards for identified Student Center instructor nodes; actual Student Center instructors receive only a no-data card until an authorized ratings source exists.
-- Labelled mock data behind an interchangeable `ProfessorDataService` interface.
-- A future-ready `chrome.storage.local` preference-storage module; the preferences UI is not part of this milestone.
+### On the Student Center portal
+
+- Hovering a **class row** shows every professor teaching that section, ranked by fit against your saved preferences, each with both ratings and a fit line.
+- A **personalized summary** beneath the professor list compares them and explains the best fit.
+- Clicking a professor opens their tags and top reviews in the same card, with a back action.
+- Changing a preference in the popup re-renders any open card immediately, with no page reload.
+- Instructors with no rating match are listed as "no ratings available yet" rather than hidden.
+
+### In the popup
+
+- **Search** — class search filtered by your saved departments, with recent searches and suggested-class cards showing a preference-driven match percentage.
+- **Professor results** — every professor teaching the selected class, ranked, with a pinned AI Recommendation panel explaining the top pick.
+- **Professor detail** — ratings alongside top reviews tagged by the reviewer's class year.
+- **Preferences** — department, class time, and learning-style multi-selects plus one-tap quick-preference chips, persisted to `chrome.storage.local`.
+
+### Throughout
+
+- Dual ratings: a PolyRatings-style overall score and a separate similar-student score.
+- A deterministic matching service (`src/services/preference-matching.ts`) converts saved preferences into match percentages, fit lines, ranking, class summaries, and recommendation copy. Changing a preference visibly changes all of them.
+
+## Not yet implemented
+
+- **No AI model is called.** The `AiSummaryService` interface in `src/services/ai-summary-service.ts` has no implementation. Summaries and fit lines are generated deterministically from a trait vocabulary, not by an LLM, and the UI says so. A real summary needs a server-side endpoint, since a browser extension must never carry a provider key.
+- **No real ratings data.** Every rating, review, and count is invented for UI development. Only five professors have demo data.
+- **Compare** is rendered per the design but disabled; there is no comparison view.
+- **Class time preferences** are stored but unused in matching.
+- **Live portal compatibility is unverified** — the adapter is built against documented PeopleSoft structures and a local fixture. See [Student Center adapter assumptions](docs/STUDENT_CENTER_ADAPTER_ASSUMPTIONS.md).
 
 ## Architecture
 
 ```
 src/
-├── models/       # Professor, review, and preference domain types
-├── services/     # Data-service interface, mock data, AI boundary, Chrome storage
-└── ui/           # React popup and Professor Results components
+├── models/       # Professor, course, review, and preference domain types
+├── services/     # Data-service boundary, mock data, preference matching, Chrome storage
+├── content/      # Student Center detection, adapter, and hover card
+└── ui/           # React popup: four screens plus shared cards, pills, and icons
 public/
 └── manifest.json # Manifest V3 configuration
 ```
 
-Future work can add a Student Center content-script adapter, an authorized backend data service, a Professor Details panel, and a Preferences interface without coupling those concerns to the card UI.
+The `ProfessorDataService` interface is the seam where an authorized backend replaces the demo data without touching the UI.
 
 ## Prerequisites
 
@@ -48,15 +67,22 @@ npm run build
 3. Enable **Developer mode** (top-right).
 4. Select **Load unpacked**.
 5. Select this project's `dist` directory.
-6. Pin **AI PolyRatings** from Chrome's Extensions menu, then click its icon. You should see “Professor Results” and the “Demo data only” label.
+6. Pin **PolyProf** from Chrome's Extensions menu, then click its icon. You should land on the Search screen with the “Demo data only” label beneath the header.
 7. After a code change, run `npm run build` again and click the extension's reload icon on `chrome://extensions`.
 
 ## Data and security rules
 
 - Do not add API keys, secrets, or private student data to the extension bundle.
 - Do not replace mock data with PolyRatings data until the team has an authorized, documented source and has reviewed its terms.
-- Keep student preferences in `chrome.storage.local`; add clear/reset controls when the preferences UI is built.
+- Keep student preferences in `chrome.storage.local`.
 - The AI summary interface is deliberately server-side only; a browser extension must never carry an AI provider secret.
+- **This build shows invented ratings for real instructors on the live portal.** The mitigation is the "Demo data" banner on every card plus exact, unambiguous name matching. Do not distribute to students, and do not remove the banner. Before any student-facing release, wire an authorized data source or set `useMockData` back to `isFixtureDocument(document)` in `src/content/content-script.ts`.
+
+## Release notes
+
+Each build handed to testers gets a release note copied from [the release notes template](docs/RELEASE_NOTES_TEMPLATE.md), which includes the install and usage walkthrough testers should follow.
+
+- [0.3.0 (alpha)](docs/releases/0.3.0-alpha.md) — all three alpha features on the Poly Portal hover card, plus the four-screen popup.
 
 ## PolyRatings research and licensing
 
