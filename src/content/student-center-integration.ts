@@ -1,7 +1,8 @@
 import type { Professor } from "../models/professor";
 import { mockReviewSummaryService } from "../services/mock-review-summary-service";
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
-import { createInstructorCandidate, findInstructorCandidates, type InstructorCandidate } from "./student-center-adapter";
+import { createInstructorCandidate, findInstructorDetection, type InstructorCandidate } from "./student-center-adapter";
+import type { IntegrationDiagnostics } from "./development-diagnostics";
 
 const hoverDelayMs = 250;
 const hideDelayMs = 140;
@@ -10,6 +11,7 @@ export interface StudentCenterIntegrationOptions {
   document: Document;
   professors: Professor[];
   useMockData: boolean;
+  diagnostics?: IntegrationDiagnostics;
 }
 
 export class StudentCenterIntegration {
@@ -40,7 +42,16 @@ export class StudentCenterIntegration {
   }
 
   scan(): void {
-    for (const candidate of findInstructorCandidates(this.options.document)) {
+    const detection = findInstructorDetection(this.options.document);
+    const { candidates } = detection;
+    this.options.diagnostics?.instructorFieldsFound(detection.instructorFieldCount);
+    this.options.diagnostics?.professorTargetsExtracted(candidates.length);
+    this.options.diagnostics?.surfaceTargetsFound({
+      myScheduleMainRow: detection.myScheduleMainRowTargets,
+      myScheduleExpandedDetail: detection.myScheduleExpandedDetailTargets,
+      scheduleBuilder: detection.scheduleBuilderTargets,
+    });
+    for (const candidate of candidates) {
       if (!this.boundTargets.has(candidate.element)) this.bindTarget(candidate);
     }
   }
@@ -57,7 +68,10 @@ export class StudentCenterIntegration {
     if (!candidate.element.hasAttribute("tabindex")) candidate.element.tabIndex = 0;
     candidate.element.setAttribute("aria-haspopup", "dialog");
     candidate.element.setAttribute("aria-label", `View PolyRatings for ${candidate.displayName.replace(/\s+/g, " ").trim()}`);
-    candidate.element.addEventListener("pointerenter", () => this.scheduleShow(this.currentCandidate(candidate), true));
+    candidate.element.addEventListener("pointerenter", () => {
+      this.options.diagnostics?.hoverEventReceived();
+      this.scheduleShow(this.currentCandidate(candidate), true);
+    });
     candidate.element.addEventListener("pointerleave", () => this.scheduleHide());
     candidate.element.addEventListener("focus", () => this.show(this.currentCandidate(candidate)));
     candidate.element.addEventListener("blur", () => this.scheduleHide());
@@ -77,18 +91,23 @@ export class StudentCenterIntegration {
   }
 
   private show(candidate: InstructorCandidate): void {
-    this.cancelShow();
-    this.cancelHide();
-    this.activeCandidate = candidate;
-    const host = this.ensureHoverHost();
-    const card = host.shadowRoot?.querySelector<HTMLElement>(".card");
-    if (!card) return;
-    this.renderCard(card, candidate);
-    const rect = candidate.element.getBoundingClientRect();
-    const cardWidth = 320;
-    host.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - cardWidth - 8))}px`;
-    host.style.top = `${Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 100))}px`;
-    host.hidden = false;
+    try {
+      this.cancelShow();
+      this.cancelHide();
+      this.activeCandidate = candidate;
+      const host = this.ensureHoverHost();
+      const card = host.shadowRoot?.querySelector<HTMLElement>(".card");
+      if (!card) throw new Error("Hover card missing");
+      this.renderCard(card, candidate);
+      const rect = candidate.element.getBoundingClientRect();
+      const cardWidth = 320;
+      host.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - cardWidth - 8))}px`;
+      host.style.top = `${Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 100))}px`;
+      host.hidden = false;
+      this.options.diagnostics?.hoverCardRendered();
+    } catch {
+      this.options.diagnostics?.renderingError();
+    }
   }
 
   private scheduleHide(): void {

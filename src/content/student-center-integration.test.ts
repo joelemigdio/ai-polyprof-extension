@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Professor } from "../models/professor";
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
-import { findInstructorCandidates } from "./student-center-adapter";
+import { findInstructorCandidates, findInstructorDetection } from "./student-center-adapter";
 import { StudentCenterIntegration } from "./student-center-integration";
 
 const professor: Professor = {
@@ -55,6 +55,42 @@ describe("Student Center integration fixture", () => {
     expect(candidates.every((candidate) => candidate.sectionElement?.tagName === "LI")).toBe(true);
   });
 
+  it("detects My Schedule instructor values nested inside dd div span structures", () => {
+    document.body.innerHTML = `<div aria-label="Class Schedule"><article><dl><dt>Course</dt><dd>CSC 4880</dd><dt>Instructor:</dt><dd><div><span aria-hidden="false">Dr. Ada Lovelace</span></div></dd></dl></article></div><span aria-hidden="false">Unrelated page text</span>`;
+    const detection = findInstructorDetection(document);
+    expect(detection.instructorFieldCount).toBe(1);
+    expect(detection.candidates.map((candidate) => candidate.instructorName)).toEqual(["Dr. Ada Lovelace"]);
+    expect(detection.candidates[0].sectionElement?.tagName).toBe("DL");
+  });
+
+  it("supports responsive My Schedule definition-list wrappers, repeated instructors, and multiple visible name values", () => {
+    document.body.innerHTML = `<div aria-label="Class Schedule"><section><dl><div><dt>Instructor</dt><dd><div><span aria-hidden="false">Dr. Ada Lovelace</span><span aria-hidden="false">Dr. Grace Hopper</span></div></dd></div></dl><dl><dt>Instructor</dt><dd><div><span aria-hidden="false">Dr. Ada Lovelace</span></div></dd></dl></section></div>`;
+    const detection = findInstructorDetection(document);
+    expect(detection.instructorFieldCount).toBe(2);
+    expect(detection.candidates.map((candidate) => candidate.instructorName)).toEqual([
+      "Dr. Ada Lovelace",
+      "Dr. Grace Hopper",
+      "Dr. Ada Lovelace",
+    ]);
+  });
+
+  it("detects main My Schedule rows from an Instructor table header without expanding details", () => {
+    document.body.innerHTML = `<div aria-label="Class Schedule"><table><thead><tr><th>Section</th><th>Instructor</th><th>Days</th></tr></thead><tbody><tr><td>S01-LEC</td><td><span>Dr. Ada<br>Lovelace</span></td><td>MoWeFr</td></tr><tr><td>S02-LAB</td><td>Dr. Grace Hopper</td><td>TuTh</td></tr><tr><td>S03-LEC</td><td>Dr. Ada Lovelace</td><td>MoWeFr</td></tr></tbody></table></div>`;
+    const detection = findInstructorDetection(document);
+    expect(detection.myScheduleMainRowTargets).toBe(3);
+    expect(detection.myScheduleExpandedDetailTargets).toBe(0);
+    expect(detection.candidates.map((candidate) => candidate.instructorName)).toEqual([
+      "Dr. Ada Lovelace", "Dr. Grace Hopper", "Dr. Ada Lovelace",
+    ]);
+  });
+
+  it("detects Schedule Builder section-table rows through their Instructor column", () => {
+    document.body.innerHTML = `<div aria-label="Section List" role="group"><div role="grid"><div role="row"><div role="columnheader">Section</div><div role="columnheader">Instructor</div></div><div role="row"><div role="gridcell">S01-LEC</div><div role="gridcell">Dr. Grace Hopper</div></div><div role="row"><div role="gridcell">S02-LAB</div><div role="gridcell">Dr. Grace Hopper</div></div></div></div>`;
+    const detection = findInstructorDetection(document);
+    expect(detection.scheduleBuilderTargets).toBe(2);
+    expect(detection.candidates.map((candidate) => candidate.instructorName)).toEqual(["Dr. Grace Hopper", "Dr. Grace Hopper"]);
+  });
+
   it("binds each explicitly separated instructor in one dd value without adding page buttons", () => {
     const integration = setFixture(`<div aria-label="Section List" role="group"><ul><li><dl><dt>Instructor</dt><dd>Dr. Ada Lovelace; Dr. Grace Hopper</dd></dl></li></ul></div>`);
     expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(0);
@@ -88,6 +124,17 @@ describe("Student Center integration fixture", () => {
     host.shadowRoot?.querySelector(".card")?.dispatchEvent(new Event("pointerleave"));
     vi.advanceTimersByTime(140);
     expect(host.hidden).toBe(true);
+    integration.stop();
+  });
+
+  it("activates the shared hover card from a My Schedule main-row instructor cell", () => {
+    vi.useFakeTimers();
+    const integration = setFixture(`<div aria-label="Class Schedule"><table><thead><tr><th>Section</th><th>Instructor</th></tr></thead><tbody><tr><td>S01-LEC</td><td>Dr. Ada Lovelace</td></tr></tbody></table></div>`);
+    const target = document.querySelector<HTMLElement>("[data-polyratings-hover-target]")!;
+    target.dispatchEvent(new Event("pointerenter"));
+    vi.advanceTimersByTime(250);
+    expect(document.querySelector<HTMLElement>("#polyratings-hover-host")?.hidden).toBe(false);
+    expect(document.querySelector<HTMLElement>("#polyratings-hover-host")?.shadowRoot?.textContent).toContain("Dr. Ada Lovelace");
     integration.stop();
   });
 
@@ -126,6 +173,27 @@ describe("Student Center integration fixture", () => {
     vi.advanceTimersByTime(50);
     expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(1);
     expect(document.querySelector("[data-polyratings-hover-target]")?.getAttribute("aria-label")).toContain("Dr. Grace Hopper");
+    integration.stop();
+  });
+
+  it("detects dynamically inserted My Schedule instructor fields", async () => {
+    vi.useFakeTimers();
+    const integration = setFixture("<div aria-label=\"Class Schedule\"></div>");
+    document.querySelector("[aria-label='Class Schedule']")?.insertAdjacentHTML("beforeend", `<article><dl><dt>Instructor:</dt><dd><div><span aria-hidden="false">Dr. Ada Lovelace</span></div></dd></dl></article>`);
+    await Promise.resolve();
+    vi.advanceTimersByTime(50);
+    expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(1);
+    expect(document.querySelector("[data-polyratings-hover-target]")?.getAttribute("aria-label")).toContain("Dr. Ada Lovelace");
+    integration.stop();
+  });
+
+  it("detects dynamically rendered My Schedule main rows", async () => {
+    vi.useFakeTimers();
+    const integration = setFixture("<div aria-label=\"Class Schedule\"><table><thead><tr><th>Section</th><th>Instructor</th></tr></thead><tbody></tbody></table></div>");
+    document.querySelector("tbody")?.insertAdjacentHTML("beforeend", "<tr><td>S01</td><td>Dr. Ada Lovelace</td></tr>");
+    await Promise.resolve();
+    vi.advanceTimersByTime(50);
+    expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(1);
     integration.stop();
   });
 });
