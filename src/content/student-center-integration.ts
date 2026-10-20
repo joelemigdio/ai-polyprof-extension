@@ -229,7 +229,7 @@ export class StudentCenterIntegration {
     close.type = "button";
     close.addEventListener("click", () => this.hide());
     head.append(group, close);
-    card.append(head, this.element("p", "demo", "Demo data — invented ratings, not real PolyRatings"));
+    card.append(head);
   }
 
   private renderPills(professor: Professor): HTMLElement {

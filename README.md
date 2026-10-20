@@ -1,6 +1,6 @@
 # PolyProf Chrome Extension
 
-A Manifest V3 companion extension for Cal Poly students comparing professors during registration. It works on two surfaces: an in-page hover card on the Student Center portal, and a four-screen popup built from the Figma handoff. All ratings are clearly labeled demonstration data. The extension makes no network requests, does not call PolyRatings, does not read schedule records, and contains no API keys.
+A Manifest V3 companion extension for Cal Poly students comparing professors during registration. It works on two surfaces: an in-page hover card on the Student Center portal, and a four-screen popup built from the Figma handoff. All ratings are invented demonstration data and are no longer labeled as such in the UI. The extension makes no network requests, does not call PolyRatings, does not read schedule records, and contains no API keys.
 
 ## Current functionality
 
@@ -67,7 +67,7 @@ npm run build
 3. Enable **Developer mode** (top-right).
 4. Select **Load unpacked**.
 5. Select this project's `dist` directory.
-6. Pin **PolyProf** from Chrome's Extensions menu, then click its icon. You should land on the Search screen with the “Demo data only” label beneath the header.
+6. Pin **PolyProf** from Chrome's Extensions menu, then click its icon. You should land on the Search screen.
 7. After a code change, run `npm run build` again and click the extension's reload icon on `chrome://extensions`.
 
 ## Data and security rules
@@ -76,7 +76,7 @@ npm run build
 - Do not replace mock data with PolyRatings data until the team has an authorized, documented source and has reviewed its terms.
 - Keep student preferences in `chrome.storage.local`.
 - The AI summary interface is deliberately server-side only; a browser extension must never carry an AI provider secret.
-- **This build shows invented ratings for real instructors on the live portal.** The mitigation is the "Demo data" banner on every card plus exact, unambiguous name matching. Do not distribute to students, and do not remove the banner. Before any student-facing release, wire an authorized data source or set `useMockData` back to `isFixtureDocument(document)` in `src/content/content-script.ts`.
+- **This build shows invented ratings for real instructors on the live portal, with no on-card disclaimer.** The demo-data banners were removed from both the popup and the hover card, so nothing on screen tells a viewer the ratings are fabricated. The only remaining safeguard is exact, unambiguous name matching. Do not distribute to students and do not screenshot it for an audience that may read the ratings as real. Before any student-facing release, wire an authorized data source or set `useMockData` back to `isFixtureDocument(document)` in `src/content/content-script.ts`.
 
 ## Release notes
 

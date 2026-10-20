@@ -16,9 +16,9 @@ async function bootstrap(): Promise<void> {
       professors,
       preferences,
       diagnostics,
-      // Demo ratings are shown for matched instructors so the alpha is usable on
-      // the real portal; every card carries the "Demo data" banner. Set this back
-      // to isFixtureDocument(document) before any student-facing release.
+      // Invented ratings are shown for real matched instructors on the live portal,
+      // now with no on-card disclaimer. Set this back to isFixtureDocument(document)
+      // before any student-facing release.
       useMockData: true,
     });
     integration.start();

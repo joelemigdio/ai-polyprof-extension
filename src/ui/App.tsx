@@ -56,7 +56,6 @@ export function App() {
         isPreferencesOpen={view === "preferences"}
         onToggle={() => setView(view === "preferences" ? "search" : "preferences")}
       />
-      <p className="demo-banner">Demo data only — ratings and reviews are invented</p>
 
       {isLoading ? <p className="empty-state">Loading…</p> : null}
 

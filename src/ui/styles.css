@@ -472,12 +472,3 @@ button.entity-card:hover { border-color: var(--border-strong); box-shadow: 0 2px
   margin: 22px 0;
   text-align: center;
 }
-.demo-banner {
-  background: var(--cream);
-  color: #7a5c12;
-  font-size: 0.7rem;
-  font-weight: 600;
-  margin: 0;
-  padding: 5px 16px;
-  text-align: center;
-}

@@ -45,16 +45,6 @@
 }
 .close:hover { background: rgb(255 255 255 / 22%); }
 
-.demo {
-  background: var(--cream);
-  color: #7a5c12;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 4px 12px;
-  text-align: center;
-}
-
 .body { display: grid; gap: 9px; padding: 11px 12px 12px; }
 
 .prof {
