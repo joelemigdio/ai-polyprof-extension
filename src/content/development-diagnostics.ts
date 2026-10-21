@@ -7,7 +7,7 @@ export const ENABLE_DEVELOPMENT_DIAGNOSTICS = true;
 export interface IntegrationDiagnostics {
   instructorFieldsFound(count: number): void;
   professorTargetsExtracted(count: number): void;
-  surfaceTargetsFound(counts: { myScheduleMainRow: number; myScheduleExpandedDetail: number; scheduleBuilder: number; classSearch: number }): void;
+  surfaceTargetsFound(counts: { myScheduleMainRow: number; myScheduleExpandedDetail: number; scheduleBuilder: number; classSearch: number; shoppingCart: number }): void;
   hoverEventReceived(): void;
   hoverCardRendered(): void;
   hoverCardDismissed(): void;
@@ -18,7 +18,7 @@ export class DevelopmentDiagnostics implements IntegrationDiagnostics {
   private readonly badge: HTMLElement;
   private instructorFieldCount: number | null = null;
   private professorTargetCount: number | null = null;
-  private surfaceTargets: { myScheduleMainRow: number; myScheduleExpandedDetail: number; scheduleBuilder: number; classSearch: number } | null = null;
+  private surfaceTargets: { myScheduleMainRow: number; myScheduleExpandedDetail: number; scheduleBuilder: number; classSearch: number; shoppingCart: number } | null = null;
   private status = "Script Loaded";
 
   constructor(private readonly document: Document) {
@@ -41,7 +41,7 @@ export class DevelopmentDiagnostics implements IntegrationDiagnostics {
 
   professorTargetsExtracted(count: number): void { this.professorTargetCount = count; this.status = `${count} Professors Found`; this.render(); console.info("[AI PolyRatings diagnostics] professor target count updated"); }
 
-  surfaceTargetsFound(counts: { myScheduleMainRow: number; myScheduleExpandedDetail: number; scheduleBuilder: number; classSearch: number }): void {
+  surfaceTargetsFound(counts: { myScheduleMainRow: number; myScheduleExpandedDetail: number; scheduleBuilder: number; classSearch: number; shoppingCart: number }): void {
     this.surfaceTargets = counts;
     this.render();
     console.info("[AI PolyRatings diagnostics] surface target counts updated");
@@ -57,7 +57,7 @@ export class DevelopmentDiagnostics implements IntegrationDiagnostics {
     if (!detail) return;
     const fields = this.instructorFieldCount === null ? "" : `${this.instructorFieldCount} Instructor Fields · `;
     const targets = this.professorTargetCount === null ? this.status : `${this.professorTargetCount} Professors Found · ${this.status}`;
-    const surfaces = this.surfaceTargets === null ? "" : `Search ${this.surfaceTargets.classSearch} · Main ${this.surfaceTargets.myScheduleMainRow} · Details ${this.surfaceTargets.myScheduleExpandedDetail} · Builder ${this.surfaceTargets.scheduleBuilder} · `;
+    const surfaces = this.surfaceTargets === null ? "" : `Search ${this.surfaceTargets.classSearch} · Main ${this.surfaceTargets.myScheduleMainRow} · Details ${this.surfaceTargets.myScheduleExpandedDetail} · Builder ${this.surfaceTargets.scheduleBuilder} · Cart ${this.surfaceTargets.shoppingCart} · `;
     detail.textContent = `${surfaces}${fields}${targets}`;
   }
 }

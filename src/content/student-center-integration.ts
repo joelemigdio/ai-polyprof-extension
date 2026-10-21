@@ -17,7 +17,7 @@ import {
 import type { IntegrationDiagnostics } from "./development-diagnostics";
 
 const hoverDelayMs = 250;
-const hideDelayMs = 140;
+const hideDelayMs = 200;
 const cardWidth = 340;
 const viewportPadding = 8;
 const cardGap = 8;
@@ -85,8 +85,11 @@ export class StudentCenterIntegration {
     this.observer = new MutationObserver(() => this.queueScan());
     this.observer.observe(this.options.document.body, {
       attributes: true,
-      attributeFilter: ["data-name"],
+      // PeopleSoft can update a rendered cart cell in place. Observe the
+      // semantic attributes/text used by the adapter, scoped to this frame.
+      attributeFilter: ["data-name", "title", "aria-hidden", "header"],
       childList: true,
+      characterData: true,
       subtree: true,
     });
   }
@@ -118,6 +121,7 @@ export class StudentCenterIntegration {
       myScheduleExpandedDetail: detection.myScheduleExpandedDetailTargets,
       scheduleBuilder: detection.scheduleBuilderTargets,
       classSearch: detection.classSearchTargets,
+      shoppingCart: detection.shoppingCartTargets,
     });
     for (const row of groupCandidatesIntoRows(detection.candidates)) {
       if (!this.boundTargets.has(row.element)) this.bindTarget(row);
@@ -140,9 +144,15 @@ export class StudentCenterIntegration {
     this.boundTargets.add(row.element);
     if (isCourseHoverRow(row)) row.element.setAttribute("data-polyratings-course-hover-target", "true");
     else row.element.setAttribute("data-polyratings-hover-target", "true");
-    if (!row.element.hasAttribute("tabindex")) row.element.tabIndex = 0;
-    row.element.setAttribute("aria-haspopup", "dialog");
-    row.element.setAttribute("aria-label", this.describeTarget(row));
+    const preservesNativeControl = isCourseHoverRow(row) && !row.clickOpensCard;
+    // Course Selection's code target is an existing button. Do not overwrite
+    // its accessible name, tab order, or click behavior; hover/focus remains
+    // additive only.
+    if (!preservesNativeControl) {
+      if (!row.element.hasAttribute("tabindex")) row.element.tabIndex = 0;
+      row.element.setAttribute("aria-haspopup", "dialog");
+      row.element.setAttribute("aria-label", this.describeTarget(row));
+    }
     row.element.addEventListener("pointerenter", () => {
       this.hoveredTarget = row.element;
       this.options.diagnostics?.hoverEventReceived();
@@ -161,6 +171,7 @@ export class StudentCenterIntegration {
     });
     row.element.addEventListener("blur", () => this.scheduleHide());
     row.element.addEventListener("click", () => {
+      if (isCourseHoverRow(row) && !row.clickOpensCard) return;
       this.clearManualDismissal();
       this.show(this.currentTarget(row), "click");
     });
@@ -228,7 +239,7 @@ export class StudentCenterIntegration {
       if (!card) throw new Error("Hover card missing");
 
       if (isCourseHoverRow(row)) this.renderCourseList(card, this.resolveCourseRow(row));
-      else this.renderList(card, this.resolveRow(row));
+      else this.renderList(card, this.resolveRow(row), row.source !== "shopping-cart");
       // A hidden element cannot be measured. Keep it visually hidden for one
       // layout pass, then position it in this document/frame's viewport.
       host.hidden = false;
@@ -393,18 +404,21 @@ export class StudentCenterIntegration {
     return node;
   }
 
-  private renderHead(card: HTMLElement, title: string, subtitle: string): void {
+  private renderHead(card: HTMLElement, title: string, subtitle: string, showClose = true): void {
     const head = this.element("header", "head");
     const group = this.element("div");
     group.append(this.element("h2", undefined, title), this.element("span", "sub", subtitle));
-    const close = this.element("button", "close", "Close") as HTMLButtonElement;
-    close.type = "button";
-    close.setAttribute("data-polyratings-action", "close-card");
-    // Handle pointerdown so the card is gone before a page-level click handler
-    // can react, while click remains available for keyboard activation.
-    close.addEventListener("pointerdown", (event) => this.handleCloseEvent(event));
-    close.addEventListener("click", (event) => this.handleCloseEvent(event));
-    head.append(group, close);
+    head.append(group);
+    if (showClose) {
+      const close = this.element("button", "close", "Close") as HTMLButtonElement;
+      close.type = "button";
+      close.setAttribute("data-polyratings-action", "close-card");
+      // Handle pointerdown so the card is gone before a page-level click handler
+      // can react, while click remains available for keyboard activation.
+      close.addEventListener("pointerdown", (event) => this.handleCloseEvent(event));
+      close.addEventListener("click", (event) => this.handleCloseEvent(event));
+      head.append(close);
+    }
     card.append(head);
   }
 
@@ -418,13 +432,14 @@ export class StudentCenterIntegration {
     return pills;
   }
 
-  private renderList(card: HTMLElement, resolved: ResolvedRow): void {
+  private renderList(card: HTMLElement, resolved: ResolvedRow, showClose = true): void {
     card.replaceChildren();
     const count = resolved.rated.length + resolved.unratedNames.length;
     this.renderHead(
       card,
       resolved.row.courseCode ?? "This class",
       `${count} ${count === 1 ? "professor" : "professors"}`,
+      showClose,
     );
 
     const body = this.element("div", "body");
@@ -442,7 +457,7 @@ export class StudentCenterIntegration {
       button.append(top, this.element("p", "fit", matchProfessor(professor, this.preferences).fitLine));
       button.addEventListener("click", (event) => {
         event.stopPropagation();
-        this.renderDetail(card, resolved, professor);
+        this.renderDetail(card, resolved, professor, showClose);
       });
       body.append(button);
     }
@@ -500,16 +515,16 @@ export class StudentCenterIntegration {
     return summary;
   }
 
-  private renderDetail(card: HTMLElement, resolved: ResolvedRow, professor: Professor): void {
+  private renderDetail(card: HTMLElement, resolved: ResolvedRow, professor: Professor, showClose = true): void {
     card.replaceChildren();
-    this.renderHead(card, professor.name, professor.department);
+    this.renderHead(card, professor.name, professor.department, showClose);
 
     const body = this.element("div", "body");
     const back = this.element("button", "back", "← Back to professors") as HTMLButtonElement;
     back.type = "button";
     back.addEventListener("click", (event) => {
       event.stopPropagation();
-      this.renderList(card, resolved);
+      this.renderList(card, resolved, showClose);
     });
     body.append(back);
 

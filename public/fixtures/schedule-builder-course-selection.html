@@ -1,0 +1,37 @@
+<!doctype html>
+<html data-polyratings-fixture>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Schedule Builder course selection fixture</title>
+  </head>
+  <body>
+    <main>
+      <h1>Select up to 12 courses to build your schedule</h1>
+      <div role="table">
+        <div role="row">
+          <div><p role="columnheader">Course</p></div>
+          <div><p role="columnheader">Course Title</p></div>
+          <div><p role="columnheader">Units</p></div>
+          <div class="sr-only" role="columnheader">Actions</div>
+        </div>
+        <div id="course-rows">
+          <div role="row" data-row-id="course-3001">
+            <div role="cell"><input aria-label="CSC 3001" type="checkbox" checked /></div>
+            <div role="rowheader"><button type="button">CSC 3001</button></div>
+            <div role="cell"><p>Modern Application Development</p></div>
+            <div role="cell">4</div>
+            <button type="button">Select Sections</button>
+          </div>
+          <div role="row" data-row-id="course-3710">
+            <div role="cell"><input aria-label="CSC 3710" type="checkbox" /></div>
+            <div role="rowheader"><button type="button">CSC 3710</button></div>
+            <div role="cell"><p>Game Design and Development</p></div>
+            <div role="cell">4</div>
+            <button type="button">Select Sections</button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

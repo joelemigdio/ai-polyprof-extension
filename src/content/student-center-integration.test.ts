@@ -62,6 +62,7 @@ function mockTargetAndCardRects(target: HTMLElement, getTargetRect: () => DOMRec
 
 afterEach(() => {
   document.documentElement.removeAttribute("data-polyratings-fixture");
+  document.documentElement.removeAttribute("id");
   document.querySelector("#polyratings-hover-host")?.remove();
   vi.useRealTimers();
 });
@@ -133,6 +134,106 @@ describe("Student Center integration fixture", () => {
     expect(detection.classSearchTargets).toBe(2);
     expect(detection.candidates.map((candidate) => candidate.instructorName)).toEqual(["Dr. Ada Lovelace", "Dr. Ada Lovelace"]);
     expect(detection.candidates.every((candidate) => candidate.element.getAttribute("aria-hidden") === "false")).toBe(true);
+  });
+
+  it("detects Shopping Cart Instructor gridcells only inside the verified cart treegrid", () => {
+    document.documentElement.id = "hcx-shopping-cart";
+    document.body.innerHTML = `<main><div aria-label="Classes" role="table"><div aria-label="Enrollment_Classes" role="treegrid"><div role="row"><div role="columnheader" header="Class">Class</div><div role="columnheader" header="Instructor">Instructor</div></div><div role="row" data-row-id="cart-1"><div role="gridcell" header="Class">CSC 430</div><div role="gridcell" header="Instructor" index="5"><div title="Michael Haungs"><span aria-hidden="false">Michael Haungs</span></div></div></div><div role="row" data-row-id="cart-2"><div role="gridcell" header="Class">CSC 431</div><div role="gridcell" header="Instructor" index="5"><div title="Michael Haungs"><span aria-hidden="false">Michael Haungs</span></div></div></div><div role="row" data-row-id="cart-3"><div role="gridcell" header="Class">CSC 480</div><div role="gridcell" header="Instructor" index="5"><div title="Ada Lovelace"><span aria-hidden="false">Ada Lovelace</span></div><div title="Grace Hopper"><span aria-hidden="false">Grace Hopper</span></div></div></div></div></div><div role="gridcell" header="Instructor">Unrelated instructor</div></main>`;
+    const detection = findInstructorDetection(document);
+    expect(detection.shoppingCartTargets).toBe(4);
+    expect(detection.candidates.map((candidate) => candidate.instructorName)).toEqual([
+      "Michael Haungs", "Michael Haungs", "Ada Lovelace", "Grace Hopper",
+    ]);
+    expect(detection.candidates.every((candidate) => candidate.element.getAttribute("title") !== null)).toBe(true);
+    expect(detection.candidates.every((candidate) => candidate.sectionElement?.getAttribute("data-row-id")?.startsWith("cart-"))).toBe(true);
+  });
+
+  it("keeps Shopping Cart controls untouched while using one shared, no-close hover card", () => {
+    vi.useFakeTimers();
+    document.documentElement.id = "hcx-shopping-cart";
+    const integration = setFixture(`<div aria-label="Classes" role="table"><div aria-label="Enrollment_Classes" role="treegrid"><div role="row"><div role="columnheader" header="Instructor">Instructor</div></div><div role="row" data-row-id="cart-1"><div role="gridcell" header="Instructor"><div title="Michael Haungs"><span aria-hidden="false">Michael Haungs</span></div></div><button id="remove-class" type="button">Remove class</button></div></div></div>`);
+    const target = document.querySelector<HTMLElement>("[title='Michael Haungs']")!;
+    const control = document.querySelector<HTMLButtonElement>("#remove-class")!;
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    expect(target.getAttribute("data-polyratings-hover-target")).toBe("true");
+
+    target.dispatchEvent(new Event("pointerenter"));
+    vi.advanceTimersByTime(250);
+    expect(host.hidden).toBe(false);
+    expect(host.shadowRoot?.querySelector(".close")).toBeNull();
+    expect(host.shadowRoot?.textContent).toContain("Michael Haungs");
+
+    target.dispatchEvent(new Event("pointerleave"));
+    host.shadowRoot?.querySelector(".card")?.dispatchEvent(new Event("pointerenter"));
+    vi.advanceTimersByTime(200);
+    expect(host.hidden).toBe(false);
+    host.shadowRoot?.querySelector(".card")?.dispatchEvent(new Event("pointerleave"));
+    vi.advanceTimersByTime(200);
+    expect(host.hidden).toBe(true);
+
+    target.dispatchEvent(new Event("focus"));
+    expect(host.hidden).toBe(false);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(host.hidden).toBe(true);
+
+    target.click();
+    const outsideEvent = new Event("pointerdown", { bubbles: true, cancelable: true, composed: true });
+    control.dispatchEvent(outsideEvent);
+    expect(host.hidden).toBe(true);
+    expect(outsideEvent.defaultPrevented).toBe(false);
+    integration.stop();
+  });
+
+  it("opens the existing course card from a verified Shopping Cart Class value", () => {
+    vi.useFakeTimers();
+    document.documentElement.id = "hcx-shopping-cart";
+    document.body.innerHTML = `<div aria-label="Classes" role="table"><div aria-label="Enrollment_Classes" role="treegrid"><div role="row"><div role="columnheader" header="Class">Class</div><div role="columnheader" header="Description">Description</div><div role="columnheader" header="Instructor">Instructor</div></div><div role="row" data-row-id="3580"><div role="rowheader" header="Class"><div title="CSC 3710">CSC 3710</div></div><div role="gridcell" header="Description"><div title="Game Design and Development">Game Design and Development</div></div><div role="gridcell" header="Instructor"><div title="Michael Haungs"><span aria-hidden="false">Michael Haungs</span></div></div><input id="cart-checkbox" type="checkbox" aria-label="CSC 3710"></div></div></div>`;
+    const courses = findCourseRows(document);
+    expect(courses).toHaveLength(1);
+    expect(courses[0].course).toEqual({ code: "CSC 3710", title: "Game Design and Development" });
+    expect(courses[0].source).toBe("shopping-cart");
+    expect(courses[0].instructors.map((instructor) => instructor.displayName)).toEqual(["Michael Haungs"]);
+
+    const integration = new StudentCenterIntegration({ document, professors: [professor], useMockData: false });
+    integration.start();
+    const target = document.querySelector<HTMLElement>("[title='CSC 3710']")!;
+    const checkbox = document.querySelector<HTMLInputElement>("#cart-checkbox")!;
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    expect(target.getAttribute("data-polyratings-course-hover-target")).toBe("true");
+    expect(checkbox.hasAttribute("data-polyratings-course-hover-target")).toBe(false);
+
+    target.dispatchEvent(new Event("pointerenter"));
+    vi.advanceTimersByTime(250);
+    expect(host.hidden).toBe(false);
+    expect(host.shadowRoot?.textContent).toContain("CSC 3710");
+    expect(host.shadowRoot?.textContent).toContain("Game Design and Development");
+    expect(host.shadowRoot?.textContent).toContain("Michael Haungs");
+    expect(host.shadowRoot?.textContent).toContain("Rating unavailable");
+    integration.stop();
+  });
+
+  it("binds dynamically added and updated Shopping Cart instructor values without duplicates", async () => {
+    vi.useFakeTimers();
+    document.documentElement.id = "hcx-shopping-cart";
+    const integration = setFixture(`<div aria-label="Classes" role="table"><div aria-label="Enrollment_Classes" role="treegrid"><div role="row"><div role="columnheader" header="Class">Class</div><div role="columnheader" header="Description">Description</div><div role="columnheader" header="Instructor">Instructor</div></div><div id="cart-rows"></div></div></div>`);
+    document.querySelector("#cart-rows")?.insertAdjacentHTML("beforeend", `<div role="row" data-row-id="cart-1"><div role="rowheader" header="Class"><div id="cart-course" title="CSC 430">CSC 430</div></div><div role="gridcell" header="Description"><div title="Software Engineering">Software Engineering</div></div><div role="gridcell" header="Instructor"><div id="cart-professor" title="Michael Haungs"><span aria-hidden="false">Michael Haungs</span></div></div></div>`);
+    await Promise.resolve();
+    vi.advanceTimersByTime(50);
+    const target = document.querySelector<HTMLElement>("#cart-professor")!;
+    expect(target.getAttribute("data-polyratings-hover-target")).toBe("true");
+    expect(document.querySelector("#cart-course")?.getAttribute("data-polyratings-course-hover-target")).toBe("true");
+    integration.scan();
+    expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(1);
+    expect(document.querySelectorAll("[data-polyratings-course-hover-target]")).toHaveLength(1);
+
+    target.setAttribute("title", "Grace Hopper");
+    target.querySelector("span")!.textContent = "Grace Hopper";
+    await Promise.resolve();
+    vi.advanceTimersByTime(50);
+    target.dispatchEvent(new Event("pointerenter"));
+    vi.advanceTimersByTime(250);
+    expect(document.querySelector("#polyratings-hover-host")?.shadowRoot?.textContent).toContain("Grace Hopper");
+    integration.stop();
   });
 
   it("detects main My Schedule rows from an Instructor table header without expanding details", () => {
@@ -228,6 +329,39 @@ describe("Student Center integration fixture", () => {
     expect(courses[0].instructors.map((instructor) => instructor.displayName)).toEqual(["Dr. Ada Lovelace"]);
   });
 
+  it("detects verified Schedule Builder course-selection rows and preserves course-code button clicks", () => {
+    vi.useFakeTimers();
+    const markup = `<div role="table"><div role="row"><div><p role="columnheader">Course</p></div><div><p role="columnheader">Course Title</p></div><div><p role="columnheader">Units</p></div></div><div role="row" data-row-id="course-3001"><div role="cell"><input aria-label="CSC 3001" type="checkbox"></div><div role="rowheader"><button id="course-code" type="button">CSC 3001</button></div><div role="cell"><p>Modern Application Development</p></div><div role="cell">4</div><button id="select-sections" type="button">Select Sections</button></div><div role="row" data-row-id="course-3710"><div role="cell"><input aria-label="CSC 3710" type="checkbox"></div><div role="rowheader"><button type="button">CSC 3710</button></div><div role="cell"><p>Game Design and Development</p></div><div role="cell">4</div></div></div>`;
+    document.body.innerHTML = markup;
+    const candidates = findCourseCandidates(document);
+    expect(candidates.map((candidate) => candidate.course)).toEqual([
+      { code: "CSC 3001", title: "Modern Application Development" },
+      { code: "CSC 3710", title: "Game Design and Development" },
+    ]);
+    expect(candidates.every((candidate) => candidate.clickOpensCard === false)).toBe(true);
+
+    const integration = new StudentCenterIntegration({ document, professors: [professor], useMockData: false });
+    integration.start();
+    const courseCode = document.querySelector<HTMLButtonElement>("#course-code")!;
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    let nativeCourseClickCount = 0;
+    courseCode.addEventListener("click", () => { nativeCourseClickCount += 1; });
+    courseCode.click();
+    expect(nativeCourseClickCount).toBe(1);
+    expect(host.hidden).toBe(true);
+    // Native button accessibility stays intact; the extension adds no ARIA
+    // overrides that could mask its existing Student Center behavior.
+    expect(courseCode.getAttribute("aria-haspopup")).toBeNull();
+    expect(courseCode.getAttribute("aria-label")).toBeNull();
+
+    courseCode.dispatchEvent(new Event("pointerenter"));
+    vi.advanceTimersByTime(250);
+    expect(host.hidden).toBe(false);
+    expect(host.shadowRoot?.textContent).toContain("CSC 3001");
+    expect(host.shadowRoot?.textContent).toContain("Modern Application Development");
+    integration.stop();
+  });
+
   it("opens a reusable course card with visible-section disclosure and comparison", () => {
     const integration = setFixture(`<main aria-label="Class Schedule" role="treegrid"><div role="row"><div role="columnheader">Class</div><div role="columnheader">Description</div><div role="columnheader">Instructor</div></div><div role="row" data-row-id="course-1"><div role="gridcell" header="Class">CSC 4880</div><div role="gridcell" header="Description">Artificial Intelligence</div><div role="gridcell" header="Instructor"><span aria-hidden="false">Dr. Ada Lovelace</span></div></div></main>`);
     const courseTarget = document.querySelector<HTMLElement>("[data-polyratings-course-hover-target]")!;
@@ -293,7 +427,7 @@ describe("Student Center integration fixture", () => {
     vi.advanceTimersByTime(200);
     expect(host.hidden).toBe(false);
     host.shadowRoot?.querySelector(".card")?.dispatchEvent(new Event("pointerleave"));
-    vi.advanceTimersByTime(140);
+    vi.advanceTimersByTime(200);
     expect(host.hidden).toBe(true);
     integration.stop();
   });
@@ -502,6 +636,19 @@ describe("Student Center integration fixture", () => {
     await Promise.resolve();
     vi.advanceTimersByTime(50);
     expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(1);
+    integration.stop();
+  });
+
+  it("detects dynamically rendered Schedule Builder course-selection rows without duplicate card targets", async () => {
+    vi.useFakeTimers();
+    const integration = setFixture(`<div role="table"><div role="row"><p role="columnheader">Course</p><p role="columnheader">Course Title</p></div><div id="course-rows"></div></div>`);
+    document.querySelector("#course-rows")?.insertAdjacentHTML("beforeend", `<div role="row" data-row-id="course-3001"><div role="cell"><input type="checkbox" aria-label="CSC 3001"></div><div role="rowheader"><button type="button">CSC 3001</button></div><div role="cell">Modern Application Development</div></div>`);
+    await Promise.resolve();
+    vi.advanceTimersByTime(50);
+    const target = document.querySelector<HTMLElement>("[data-polyratings-course-hover-target]")!;
+    expect(target.textContent).toBe("CSC 3001");
+    integration.scan();
+    expect(document.querySelectorAll("[data-polyratings-course-hover-target]")).toHaveLength(1);
     integration.stop();
   });
 

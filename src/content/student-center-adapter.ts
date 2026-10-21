@@ -9,7 +9,7 @@ export interface InstructorCandidate {
   source?: InstructorDetectionSource;
 }
 
-export type InstructorDetectionSource = "class-search" | "my-schedule-main-row" | "my-schedule-expanded-detail" | "schedule-builder";
+export type InstructorDetectionSource = "class-search" | "my-schedule-main-row" | "my-schedule-expanded-detail" | "schedule-builder" | "shopping-cart";
 
 export interface InstructorDetectionResult {
   instructorFieldCount: number;
@@ -18,9 +18,10 @@ export interface InstructorDetectionResult {
   myScheduleExpandedDetailTargets: number;
   scheduleBuilderTargets: number;
   classSearchTargets: number;
+  shoppingCartTargets: number;
 }
 
-export type CourseDetectionSource = "class-search" | "my-schedule" | "schedule-builder" | "fixture";
+export type CourseDetectionSource = "class-search" | "my-schedule" | "schedule-builder" | "shopping-cart" | "fixture";
 
 /** A visible, semantically identified course code/title target. */
 export interface CourseCandidate {
@@ -28,6 +29,8 @@ export interface CourseCandidate {
   scopeElement: HTMLElement;
   course: Course;
   source: CourseDetectionSource;
+  /** False when the target is an existing Student Center control. */
+  clickOpensCard: boolean;
 }
 
 /** A course hover target plus the instructors visible in its local section data. */
@@ -38,10 +41,15 @@ export interface CourseHoverRow {
   instructors: CourseInstructor[];
   visibleSectionCount: number;
   source: CourseDetectionSource;
+  clickOpensCard: boolean;
 }
 
 const scheduleBuilderContainerSelector = "[aria-label='Section List'][role='group'], [aria-label='Sections List'][role='table']";
 const scheduleScopeSelector = `${scheduleBuilderContainerSelector}, [aria-label='Class Schedule']`;
+// Shopping Cart is its own document in TargetContent. This selector is
+// deliberately scoped to its verified semantic root so similarly named cells
+// in other Student Center pages cannot become professor hover targets.
+const shoppingCartTreegridSelector = "html#hcx-shopping-cart [aria-label='Classes'][role='table'] [aria-label='Enrollment_Classes'][role='treegrid']";
 
 function extractInstructorText(element: HTMLElement): string {
   let text = "";
@@ -131,6 +139,10 @@ function isInstructorText(value: string): boolean {
   return value.replace(/\s+/g, " ").trim().toLocaleLowerCase().replace(/:$/, "") === "instructor";
 }
 
+function hasColumnHeader(element: HTMLElement, columnName: string): boolean {
+  return (element.getAttribute("header") ?? "").replace(/\s+/g, " ").trim().toLocaleLowerCase() === columnName.toLocaleLowerCase();
+}
+
 function isInstructorLabel(label: HTMLElement): boolean {
   return isInstructorText(normalizedText(label));
 }
@@ -160,12 +172,29 @@ function namesFromInstructorValue(value: HTMLElement): string[] {
   return extractInstructorText(value).split(";").map((name) => name.trim()).filter(Boolean);
 }
 
-function visibleInstructorTarget(value: HTMLElement): HTMLElement {
-  const titled = value.querySelector<HTMLElement>("span[title]");
-  if (titled?.getAttribute("title")?.trim()) return titled;
+function visibleInstructorTargets(value: HTMLElement): HTMLElement[] {
+  // Class Search uses a titled span, while the verified Shopping Cart markup
+  // puts title on a nested div. This remains safe because callers have already
+  // constrained value to an Instructor field/cell.
+  const titled = Array.from(value.querySelectorAll<HTMLElement>("[title]"))
+    .filter((element) => element.getAttribute("title")?.trim());
+  if (titled.length > 0) return titled;
   const visibleLeaves = Array.from(value.querySelectorAll<HTMLElement>("[aria-hidden='false']"))
     .filter((element) => !element.querySelector("[aria-hidden='false']"));
-  return visibleLeaves[0] ?? value;
+  return visibleLeaves.length > 0 ? visibleLeaves : [value];
+}
+
+function visibleInstructorTarget(value: HTMLElement): HTMLElement {
+  return visibleInstructorTargets(value)[0] ?? value;
+}
+
+function visibleCourseTarget(value: HTMLElement): HTMLElement {
+  const titled = Array.from(value.querySelectorAll<HTMLElement>("[title]"))
+    .find((element) => element.getAttribute("title")?.trim());
+  if (titled) return titled;
+  const visibleLeaf = Array.from(value.querySelectorAll<HTMLElement>("[aria-hidden='false']"))
+    .find((element) => !element.querySelector("[aria-hidden='false']"));
+  return visibleLeaf ?? value;
 }
 
 function structuralPath(root: HTMLElement, descendant: HTMLElement): number[] | null {
@@ -339,6 +368,39 @@ function findClassSearchDesktopCandidates(root: ParentNode): InstructorCandidate
   return candidates;
 }
 
+/**
+ * Detects the verified Enrollment → Shopping Cart grid only. The content
+ * script runs inside TargetContent (all_frames), so this function never
+ * traverses the outer authenticated document or reads enrollment controls.
+ */
+function findShoppingCartCandidates(root: ParentNode): InstructorCandidate[] {
+  const candidates: InstructorCandidate[] = [];
+  for (const treegrid of root.querySelectorAll<HTMLElement>(shoppingCartTreegridSelector)) {
+    const hasInstructorHeader = Array.from(treegrid.querySelectorAll<HTMLElement>("[role='columnheader'][header]"))
+      .some((header) => isInstructorText(header.getAttribute("header") ?? ""));
+    if (!hasInstructorHeader) continue;
+
+    for (const row of treegrid.querySelectorAll<HTMLElement>("[role='row'][data-row-id]")) {
+      const instructorCells = Array.from(row.querySelectorAll<HTMLElement>("[role='gridcell'][header]"))
+        .filter((cell) => isInstructorText(cell.getAttribute("header") ?? ""));
+      for (const cell of instructorCells) {
+        const targets = visibleInstructorTargets(cell);
+        const names = namesFromInstructorValue(cell);
+        // Prefer one actual titled/visible name target per displayed
+        // instructor. The cell fallback preserves support for a semicolon
+        // separated value without broadening detection outside this field.
+        for (const [index, name] of names.entries()) {
+          const target = targets[index] ?? targets[0] ?? cell;
+          const title = target.getAttribute("title")?.trim();
+          const candidate = createInstructorCandidate(target, title || name, "shopping-cart");
+          candidates.push({ ...candidate, sectionElement: row });
+        }
+      }
+    }
+  }
+  return candidates;
+}
+
 function definitionListTitle(definitionList: HTMLElement): string | null {
   for (const label of definitionList.querySelectorAll<HTMLElement>("dt")) {
     if (!isCourseTitleLabel(label)) continue;
@@ -362,6 +424,7 @@ function findDefinitionListCourseCandidates(root: ParentNode): CourseCandidate[]
       scopeElement: definitionList ?? courseScopeFor(value),
       course,
       source: courseSourceFor(value),
+      clickOpensCard: true,
     });
   }
   return candidates;
@@ -381,7 +444,82 @@ function findMyScheduleCourseCandidates(root: ParentNode): CourseCandidate[] {
         .find((cell) => ["description", "course title"].includes((cell.getAttribute("header") ?? "").replace(/\s+/g, " ").trim().toLocaleLowerCase()));
       const course = courseFromText(extractInstructorText(classCell), titleCell ? extractInstructorText(titleCell) : null);
       if (!course) continue;
-      candidates.push({ element: classCell, scopeElement: row, course, source: "my-schedule" });
+      candidates.push({ element: classCell, scopeElement: row, course, source: "my-schedule", clickOpensCard: true });
+    }
+  }
+  return candidates;
+}
+
+function findScheduleBuilderCourseSelectionCandidates(root: ParentNode): CourseCandidate[] {
+  const candidates: CourseCandidate[] = [];
+  for (const table of root.querySelectorAll<HTMLElement>("[role='table']")) {
+    const headers = Array.from(table.querySelectorAll<HTMLElement>("[role='columnheader']"));
+    const hasCourseHeader = headers.some((header) => normalizedText(header) === "course");
+    const hasCourseTitleHeader = headers.some((header) => normalizedText(header) === "course title");
+    if (!hasCourseHeader || !hasCourseTitleHeader) continue;
+
+    for (const row of table.querySelectorAll<HTMLElement>("[role='row']")) {
+      // Verified Schedule Builder course-selection markup uses a rowheader
+      // button for the course code. Its immediate semantic successor is the
+      // Course Title cell. No generated class names or fixed grid positions
+      // are used here.
+      const courseButton = row.querySelector<HTMLElement>("[role='rowheader'] button");
+      if (!courseButton) continue;
+      const course = courseFromText(extractInstructorText(courseButton));
+      if (!course) continue;
+      const fields = Array.from(row.querySelectorAll<HTMLElement>("[role='cell'], [role='rowheader']"));
+      const rowHeader = courseButton.closest<HTMLElement>("[role='rowheader']");
+      const rowHeaderIndex = rowHeader ? fields.indexOf(rowHeader) : -1;
+      const titleCell = fields.slice(rowHeaderIndex + 1).find((field) => field.getAttribute("role") === "cell");
+      const title = titleCell ? extractInstructorText(titleCell).replace(/\s+/g, " ").trim() : "";
+      if (title) course.title = title;
+      candidates.push({
+        element: courseButton,
+        scopeElement: row,
+        course,
+        source: "schedule-builder",
+        // This button belongs to Student Center. Hover/focus may show our
+        // card, but an ordinary click must keep its native action untouched.
+        clickOpensCard: false,
+      });
+    }
+  }
+  return candidates;
+}
+
+/**
+ * Reads only the verified Shopping Cart Class and Description cells. The
+ * target is the displayed course-code value, never a checkbox, row expander,
+ * enrollment action, or another Cart control.
+ */
+function findShoppingCartCourseCandidates(root: ParentNode): CourseCandidate[] {
+  const candidates: CourseCandidate[] = [];
+  for (const treegrid of root.querySelectorAll<HTMLElement>(shoppingCartTreegridSelector)) {
+    const headers = Array.from(treegrid.querySelectorAll<HTMLElement>("[role='columnheader'][header]"));
+    if (!headers.some((header) => hasColumnHeader(header, "Class"))
+      || !headers.some((header) => hasColumnHeader(header, "Description"))) continue;
+
+    for (const row of treegrid.querySelectorAll<HTMLElement>("[role='row'][data-row-id]")) {
+      const classCell = Array.from(row.querySelectorAll<HTMLElement>("[role='rowheader'][header]"))
+        .find((cell) => hasColumnHeader(cell, "Class"));
+      const descriptionCell = Array.from(row.querySelectorAll<HTMLElement>("[role='gridcell'][header]"))
+        .find((cell) => hasColumnHeader(cell, "Description"));
+      if (!classCell || !descriptionCell) continue;
+
+      const target = visibleCourseTarget(classCell);
+      const titleTarget = visibleCourseTarget(descriptionCell);
+      const course = courseFromText(
+        target.getAttribute("title")?.trim() || extractInstructorText(target),
+        titleTarget.getAttribute("title")?.trim() || extractInstructorText(titleTarget),
+      );
+      if (!course) continue;
+      candidates.push({
+        element: target,
+        scopeElement: row,
+        course,
+        source: "shopping-cart",
+        clickOpensCard: true,
+      });
     }
   }
   return candidates;
@@ -398,6 +536,7 @@ function findMarkedCourseCandidates(root: ParentNode): CourseCandidate[] {
       scopeElement: courseScopeFor(element),
       course,
       source: "fixture",
+      clickOpensCard: true,
     });
   }
   return candidates;
@@ -413,6 +552,8 @@ export function findCourseCandidates(root: ParentNode = document): CourseCandida
     ...findMarkedCourseCandidates(root),
     ...findDefinitionListCourseCandidates(root),
     ...findMyScheduleCourseCandidates(root),
+    ...findScheduleBuilderCourseSelectionCandidates(root),
+    ...findShoppingCartCourseCandidates(root),
   ];
   return candidates.filter((candidate, index, all) => (
     all.findIndex((other) => other.element === candidate.element && other.course.code === candidate.course.code) === index
@@ -446,6 +587,7 @@ export function findCourseRows(root: ParentNode = document): CourseHoverRow[] {
       instructors: courseInstructors,
       visibleSectionCount: scopes.size,
       source: candidate.source,
+      clickOpensCard: candidate.clickOpensCard,
     };
   });
 }
@@ -468,6 +610,8 @@ export interface ClassRow {
   sectionElement: HTMLElement;
   courseCode: string | null;
   instructors: RowInstructor[];
+  /** Detection surface, used only to vary shared-card affordances safely. */
+  source?: InstructorDetectionSource;
 }
 
 /**
@@ -480,7 +624,7 @@ export function groupCandidatesIntoRows(candidates: InstructorCandidate[]): Clas
   interface GroupedSection {
     courseCode: string | null;
     instructors: RowInstructor[];
-    targets: HTMLElement[];
+    targets: Array<{ element: HTMLElement; source?: InstructorDetectionSource }>;
   }
   const sections = new Map<HTMLElement, GroupedSection>();
 
@@ -495,22 +639,25 @@ export function groupCandidatesIntoRows(candidates: InstructorCandidate[]): Clas
       sections.set(sectionElement, {
         courseCode: candidate.courseCode,
         instructors: [instructor],
-        targets: [candidate.element],
+        targets: [{ element: candidate.element, source: candidate.source }],
       });
       continue;
     }
     if (!existing.instructors.some((item) => item.instructorName === instructor.instructorName)) {
       existing.instructors.push(instructor);
     }
-    if (!existing.targets.includes(candidate.element)) existing.targets.push(candidate.element);
+    if (!existing.targets.some((target) => target.element === candidate.element)) {
+      existing.targets.push({ element: candidate.element, source: candidate.source });
+    }
     existing.courseCode ??= candidate.courseCode;
   }
 
-  return [...sections.entries()].flatMap(([sectionElement, section]) => section.targets.map((element) => ({
+  return [...sections.entries()].flatMap(([sectionElement, section]) => section.targets.map(({ element, source }) => ({
     element,
     sectionElement,
     courseCode: section.courseCode,
     instructors: section.instructors,
+    source,
   })));
 }
 
@@ -533,7 +680,8 @@ export function findInstructorDetection(root: ParentNode = document): Instructor
   const mainRowCandidates = findMainRowInstructorCandidates(root);
   const classSearchCandidates = findClassSearchCandidates(root);
   const classSearchDesktopCandidates = findClassSearchDesktopCandidates(root);
-  const candidates = [...directCandidates, ...fieldDetection.candidates, ...mainRowCandidates, ...classSearchCandidates, ...classSearchDesktopCandidates]
+  const shoppingCartCandidates = findShoppingCartCandidates(root);
+  const candidates = [...directCandidates, ...fieldDetection.candidates, ...mainRowCandidates, ...classSearchCandidates, ...classSearchDesktopCandidates, ...shoppingCartCandidates]
     .filter((candidate, index, all) => all.findIndex((other) => other.element === candidate.element && other.instructorName === candidate.instructorName) === index)
     .filter((candidate) => candidate.instructorName.trim().length > 0);
   return {
@@ -543,5 +691,6 @@ export function findInstructorDetection(root: ParentNode = document): Instructor
     myScheduleExpandedDetailTargets: countUniqueTargets(candidates, "my-schedule-expanded-detail"),
     scheduleBuilderTargets: countUniqueTargets(candidates, "schedule-builder"),
     classSearchTargets: countUniqueTargets(candidates, "class-search"),
+    shoppingCartTargets: countUniqueTargets(candidates, "shopping-cart"),
   };
 }

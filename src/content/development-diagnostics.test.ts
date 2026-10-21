@@ -10,11 +10,12 @@ it("shows non-sensitive content-script and integration stages in a removable bad
   expect(badge.shadowRoot?.textContent).toContain("13 Instructor Fields");
   diagnostics.professorTargetsExtracted(2);
   expect(badge.shadowRoot?.textContent).toContain("2 Professors Found");
-  diagnostics.surfaceTargetsFound({ classSearch: 4, myScheduleMainRow: 2, myScheduleExpandedDetail: 1, scheduleBuilder: 3 });
+  diagnostics.surfaceTargetsFound({ classSearch: 4, myScheduleMainRow: 2, myScheduleExpandedDetail: 1, scheduleBuilder: 3, shoppingCart: 5 });
   expect(badge.shadowRoot?.textContent).toContain("Search 4");
   expect(badge.shadowRoot?.textContent).toContain("Main 2");
   expect(badge.shadowRoot?.textContent).toContain("Details 1");
   expect(badge.shadowRoot?.textContent).toContain("Builder 3");
+  expect(badge.shadowRoot?.textContent).toContain("Cart 5");
   diagnostics.hoverEventReceived();
   expect(badge.shadowRoot?.textContent).toContain("Hover Event Received");
   diagnostics.hoverCardRendered();
