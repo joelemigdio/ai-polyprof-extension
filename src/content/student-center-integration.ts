@@ -1,6 +1,7 @@
 import hoverCardStyles from "./hover-card.css?inline";
-import type { Professor } from "../models/professor";
-import { createDefaultPreferences, traitLabel, type StudentPreferences } from "../models/preferences";
+import { formatRating, ratingScaleMax, scopeToCourse, type CourseScopedRating, type Professor } from "../models/professor";
+import { createDefaultPreferences, type StudentPreferences } from "../models/preferences";
+import { courseAliases, courseTitle } from "../data/course-crosswalk";
 import { buildClassSummary, matchProfessor, rankProfessors } from "../services/preference-matching";
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
 import { findClassRows, findInstructorDetection, groupCandidatesIntoRows, type ClassRow } from "./student-center-adapter";
@@ -9,11 +10,17 @@ import type { IntegrationDiagnostics } from "./development-diagnostics";
 const hoverDelayMs = 250;
 const hideDelayMs = 140;
 const cardWidth = 340;
+const maxReviewsShown = 4;
+
+/** Supplies review text for one professor; the index alone carries only scores. */
+export interface ProfessorDetailSource {
+  getProfessorDetail(id: string): Promise<Professor>;
+}
 
 export interface StudentCenterIntegrationOptions {
   document: Document;
   professors: Professor[];
-  useMockData: boolean;
+  details?: ProfessorDetailSource;
   preferences?: StudentPreferences;
   diagnostics?: IntegrationDiagnostics;
 }
@@ -22,6 +29,8 @@ interface ResolvedRow {
   row: ClassRow;
   rated: Professor[];
   unratedNames: string[];
+  /** Codes this class's reviews could be filed under, oldest numbering included. */
+  aliases: string[];
 }
 
 export class StudentCenterIntegration {
@@ -31,6 +40,9 @@ export class StudentCenterIntegration {
   private hideTimer: number | null = null;
   private activeRow: ClassRow | null = null;
   private readonly boundTargets = new WeakSet<HTMLElement>();
+  private readonly details = new Map<string, Professor>();
+  /** Set while the card shows one professor's detail view rather than the list. */
+  private activeProfessorId: string | null = null;
   private host: HTMLElement | null = null;
   private preferences: StudentPreferences;
 
@@ -62,7 +74,7 @@ export class StudentCenterIntegration {
   /** Re-renders an open card so a preference change is reflected immediately. */
   updatePreferences(preferences: StudentPreferences): void {
     this.preferences = preferences;
-    if (this.activeRow) this.show(this.activeRow);
+    if (this.activeRow) this.refresh(this.activeRow);
   }
 
   scan(): void {
@@ -121,14 +133,53 @@ export class StudentCenterIntegration {
     const unratedNames: string[] = [];
 
     for (const instructor of row.instructors) {
-      const professor = this.options.useMockData
-        ? findConfidentProfessor(instructor.instructorName, this.options.professors)
-        : null;
-      if (professor && !rated.includes(professor)) rated.push(professor);
+      const match = findConfidentProfessor(instructor.instructorName, this.options.professors);
+      // Prefer the fetched record so reviews appear once they have loaded.
+      const professor = match && (this.details.get(match.id) ?? match);
+      if (professor && !rated.some((existing) => existing.id === professor.id)) rated.push(professor);
       else if (!professor) unratedNames.push(instructor.displayName);
     }
 
-    return { row, rated: rankProfessors(rated, this.preferences), unratedNames };
+    return {
+      row,
+      rated: rankProfessors(rated, this.preferences),
+      unratedNames,
+      aliases: row.courseCode ? courseAliases(row.courseCode) : [],
+    };
+  }
+
+  /**
+   * Fetches review text for the professors on an open card, then re-renders if
+   * the student is still hovering the same class. Index ratings stay on screen
+   * while this runs, and a failed fetch simply leaves the card without reviews.
+   */
+  private async loadDetails(row: ClassRow, resolved: ResolvedRow): Promise<void> {
+    const source = this.options.details;
+    if (!source) return;
+    const pending = resolved.rated.filter((professor) => !this.details.has(professor.id));
+    if (pending.length === 0) return;
+
+    await Promise.all(
+      pending.map(async (professor) => {
+        try {
+          this.details.set(professor.id, await source.getProfessorDetail(professor.id));
+        } catch {
+          this.options.diagnostics?.renderingError();
+        }
+      }),
+    );
+
+    if (this.activeRow?.element === row.element) this.refresh(row);
+  }
+
+  /** Re-renders in place, keeping an open detail view open. */
+  private refresh(row: ClassRow): void {
+    const card = this.host?.shadowRoot?.querySelector<HTMLElement>(".card");
+    if (!card) return;
+    const resolved = this.resolveRow(row);
+    const open = resolved.rated.find((professor) => professor.id === this.activeProfessorId);
+    if (open) this.renderDetail(card, resolved, open);
+    else this.renderList(card, resolved);
   }
 
   private scheduleShow(row: ClassRow): void {
@@ -147,7 +198,9 @@ export class StudentCenterIntegration {
       const card = host.shadowRoot?.querySelector<HTMLElement>(".card");
       if (!card) throw new Error("Hover card missing");
 
-      this.renderList(card, this.resolveRow(row));
+      const resolved = this.resolveRow(row);
+      this.renderList(card, resolved);
+      void this.loadDetails(row, resolved);
       const rect = row.element.getBoundingClientRect();
       host.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - cardWidth - 8))}px`;
       host.style.top = `${Math.max(8, Math.min(rect.bottom + 8, window.innerHeight - 120))}px`;
@@ -168,6 +221,7 @@ export class StudentCenterIntegration {
     this.cancelHide();
     if (this.host) this.host.hidden = true;
     this.activeRow = null;
+    this.activeProfessorId = null;
   }
 
   private handleKeydown = (event: KeyboardEvent): void => {
@@ -234,21 +288,42 @@ export class StudentCenterIntegration {
 
   private renderPills(professor: Professor): HTMLElement {
     const pills = this.element("div", "pills");
-    const star = this.element("span", "pill star", `★ ${professor.starRating.toFixed(1)}`);
-    star.setAttribute("aria-label", `Overall rating ${professor.starRating.toFixed(1)} out of 5`);
-    const peer = this.element("span", "pill peer", `◉ ${professor.peerRating.toFixed(1)}`);
-    peer.setAttribute("aria-label", `Similar-student rating ${professor.peerRating.toFixed(1)} out of 5`);
-    pills.append(star, peer);
+    const star = this.element("span", "pill star", `★ ${formatRating(professor.starRating)}`);
+    star.setAttribute("aria-label", `Overall rating ${formatRating(professor.starRating)} out of ${ratingScaleMax}`);
+    star.title = `PolyRatings overall rating, ${formatRating(professor.starRating)} out of ${ratingScaleMax}`;
+    const clarity = this.element("span", "pill peer", `◉ ${formatRating(professor.clarityRating)}`);
+    clarity.setAttribute(
+      "aria-label",
+      `Presents material clearly ${formatRating(professor.clarityRating)} out of ${ratingScaleMax}`,
+    );
+    clarity.title = `Presents material clearly, ${formatRating(professor.clarityRating)} out of ${ratingScaleMax}`;
+    pills.append(star, clarity);
     return pills;
   }
 
+  /** States this professor's record for the hovered class specifically. */
+  private renderCourseLine(courseCode: string, scoped: CourseScopedRating, hasReviews: boolean): HTMLElement {
+    if (scoped.reviewCount > 0) {
+      const count = `${scoped.reviewCount} ${scoped.reviewCount === 1 ? "review" : "reviews"}`;
+      return this.element("p", "course-line", `In ${courseCode}: ★ ${formatRating(scoped.rating ?? 0)} from ${count}`);
+    }
+    return this.element(
+      "p",
+      "course-line muted",
+      hasReviews ? `No reviews filed under ${courseCode}` : `Loading ${courseCode} reviews…`,
+    );
+  }
+
   private renderList(card: HTMLElement, resolved: ResolvedRow): void {
+    this.activeProfessorId = null;
     card.replaceChildren();
     const count = resolved.rated.length + resolved.unratedNames.length;
+    const courseCode = resolved.row.courseCode;
+    const title = courseCode ? courseTitle(courseCode) : undefined;
     this.renderHead(
       card,
-      resolved.row.courseCode ?? "This class",
-      `${count} ${count === 1 ? "professor" : "professors"}`,
+      courseCode ?? "This class",
+      title ? `${title} • ${count} ${count === 1 ? "professor" : "professors"}` : `${count} ${count === 1 ? "professor" : "professors"}`,
     );
 
     const body = this.element("div", "body");
@@ -263,7 +338,13 @@ export class StudentCenterIntegration {
         this.element("p", "prof-meta", `${professor.department} • ${professor.reviewCount} reviews`),
       );
       top.append(identity, this.renderPills(professor));
-      button.append(top, this.element("p", "fit", matchProfessor(professor, this.preferences).fitLine));
+      button.append(top);
+      if (courseCode) {
+        button.append(
+          this.renderCourseLine(courseCode, scopeToCourse(professor, resolved.aliases), this.details.has(professor.id)),
+        );
+      }
+      button.append(this.element("p", "fit", matchProfessor(professor, this.preferences).fitLine));
       button.addEventListener("click", (event) => {
         event.stopPropagation();
         this.renderDetail(card, resolved, professor);
@@ -284,12 +365,17 @@ export class StudentCenterIntegration {
     summary.append(
       this.element("h3", undefined, "Personalized summary"),
       this.element("p", undefined, buildClassSummary(professors, this.preferences)),
-      this.element("p", "note", "Generated from your saved preferences. No AI model is used in this build."),
+      this.element(
+        "p",
+        "note",
+        `Fit is generated from your saved preferences; no AI model is used. Ratings and reviews come from PolyRatings, scored out of ${ratingScaleMax}.`,
+      ),
     );
     return summary;
   }
 
   private renderDetail(card: HTMLElement, resolved: ResolvedRow, professor: Professor): void {
+    this.activeProfessorId = professor.id;
     card.replaceChildren();
     this.renderHead(card, professor.name, professor.department);
 
@@ -313,26 +399,33 @@ export class StudentCenterIntegration {
     overview.append(top, this.element("p", "fit", matchProfessor(professor, this.preferences).fitLine));
     body.append(overview);
 
-    if (professor.traits.length > 0) {
+    if (professor.tags.length > 0) {
       const tagCard = this.element("div", "detail-card");
       tagCard.append(this.element("h3", undefined, "Tags"));
       const tags = this.element("div", "tags");
-      for (const trait of professor.traits) tags.append(this.element("span", "tag", traitLabel(trait)));
+      for (const tag of professor.tags) tags.append(this.element("span", "tag", tag));
       tagCard.append(tags);
       body.append(tagCard);
     }
 
+    // Reviews for the hovered class lead, since that is what the student is
+    // deciding about; the rest follow in recency order.
+    const scoped = scopeToCourse(professor, resolved.aliases);
+    const ordered = [...scoped.reviews, ...professor.reviews.filter((review) => !scoped.reviews.includes(review))];
+
     const reviewCard = this.element("div", "detail-card");
-    reviewCard.append(this.element("h3", undefined, `Top reviews (${professor.reviewCount} total)`));
-    if (professor.reviews.length === 0) {
-      reviewCard.append(this.element("p", undefined, "No reviews are available for this professor yet."));
+    reviewCard.append(this.element("h3", undefined, `Reviews (${professor.reviewCount} total)`));
+    if (ordered.length === 0) {
+      reviewCard.append(
+        this.element("p", undefined, this.details.has(professor.id) ? "No reviews are available for this professor yet." : "Loading reviews…"),
+      );
     } else {
-      for (const review of professor.reviews) {
+      for (const review of ordered.slice(0, maxReviewsShown)) {
         const item = this.element("article", "review");
         const head = this.element("div", "review-head");
         head.append(
           this.element("span", "review-origin", `${review.classYear} • ${review.courseCode}`),
-          this.element("span", "pill star", `★ ${review.rating.toFixed(1)}`),
+          this.element("span", "pill star", `★ ${formatRating(review.rating)}`),
         );
         item.append(head, this.element("p", undefined, review.text));
         reviewCard.append(item);

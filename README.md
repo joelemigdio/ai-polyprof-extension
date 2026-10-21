@@ -1,6 +1,8 @@
 # PolyProf Chrome Extension
 
-A Manifest V3 companion extension for Cal Poly students comparing professors during registration. It works on two surfaces: an in-page hover card on the Student Center portal, and a four-screen popup built from the Figma handoff. All ratings are invented demonstration data and are no longer labeled as such in the UI. The extension makes no network requests, does not call PolyRatings, does not read schedule records, and contains no API keys.
+A Manifest V3 companion extension for Cal Poly students comparing professors during registration. It works on two surfaces: an in-page hover card on the Student Center portal, and a four-screen popup built from the Figma handoff.
+
+The hover card reads **real PolyRatings data** from the public read-only API at `api-prod.polyratings.org`. The popup still renders invented demonstration data and has not been migrated. The extension reads no schedule records, writes nothing back, and contains no API keys.
 
 ## Current functionality
 
@@ -21,13 +23,15 @@ A Manifest V3 companion extension for Cal Poly students comparing professors dur
 
 ### Throughout
 
-- Dual ratings: a PolyRatings-style overall score and a separate similar-student score.
+- Dual ratings per professor, both on PolyRatings' native **0-4 scale**: overall rating and "presents material clearly".
 - A deterministic matching service (`src/services/preference-matching.ts`) converts saved preferences into match percentages, fit lines, ranking, class summaries, and recommendation copy. Changing a preference visibly changes all of them.
 
 ## Not yet implemented
 
 - **No AI model is called.** The `AiSummaryService` interface in `src/services/ai-summary-service.ts` has no implementation. Summaries and fit lines are generated deterministically from a trait vocabulary, not by an LLM, and the UI says so. A real summary needs a server-side endpoint, since a browser extension must never carry a provider key.
-- **No real ratings data.** Every rating, review, and count is invented for UI development. Only five professors have demo data.
+- **The popup still shows demo data.** Only the in-page hover card reads PolyRatings. Migrating the popup needs a UX decision: its search screen browses courses, and real data has ~3,600 of them rather than four.
+- **Similar-student ratings do not exist.** The second pill now shows PolyRatings' "presents material clearly" score. A genuine peer rating would need the student's class standing added to preferences, so reviews could be filtered by `gradeLevel`.
+- **Five of eight learning-style traits cannot match real data.** PolyRatings tags are logistics ("Uploads Slides", "Recorded Lectures"), not pedagogy. `project-heavy`, `code-evaluation`, `labs`, `clear-grading`, and `light-midterms` have no equivalent, so preference matching fires on only three traits until the vocabulary is migrated.
 - **Compare** is rendered per the design but disabled; there is no comparison view.
 - **Class time preferences** are stored but unused in matching.
 - **Live portal compatibility is unverified** — the adapter is built against documented PeopleSoft structures and a local fixture. See [Student Center adapter assumptions](docs/STUDENT_CENTER_ADAPTER_ASSUMPTIONS.md).
@@ -37,14 +41,31 @@ A Manifest V3 companion extension for Cal Poly students comparing professors dur
 ```
 src/
 ├── models/       # Professor, course, review, and preference domain types
-├── services/     # Data-service boundary, mock data, preference matching, Chrome storage
+├── data/         # Generated quarter->semester course crosswalk and lookup helpers
+├── background/   # MV3 service worker: PolyRatings fetching and caching
+├── services/     # Data-service boundary, PolyRatings client, preference matching, storage
 ├── content/      # Student Center detection, adapter, and hover card
 └── ui/           # React popup: four screens plus shared cards, pills, and icons
 public/
 └── manifest.json # Manifest V3 configuration
 ```
 
-The `ProfessorDataService` interface is the seam where an authorized backend replaces the demo data without touching the UI.
+The `ProfessorDataService` interface is the seam between the UI and a data source. `polyratingsDataService` implements it against the live API; `mockProfessorDataService` still backs the popup.
+
+### How real data is fetched
+
+Content scripts do not call PolyRatings directly. They message the background service worker, which runs on the extension origin and so is not subject to the Student Center page's `connect-src` policy. The worker caches the 2,473-professor index in `chrome.storage.local` for 24 hours (PolyRatings regenerates nightly) and per-professor reviews in `chrome.storage.session`, and serves a stale index if the API is unreachable.
+
+### Course numbers
+
+Cal Poly renumbered every course for the Fall 2026 semester conversion, so a class on screen reads `CSC 3449` while its reviews are filed under `CSC 349`. The renumbering was not arithmetic — `CSC 357` became `CSC 2050` — and Cal Poly published no crosswalk, so `scripts/build-course-crosswalk.mjs` derives one from the "Formerly"/"Replaced" notes in the semester catalog:
+
+```sh
+npm run build:crosswalk          # all 128 departments
+node scripts/build-course-crosswalk.mjs csc cpe   # one or more departments
+```
+
+The script asserts a set of hand-verified pairs on every run and fails loudly if the catalog's markup or wording changes. It currently yields 3,579 mappings plus 4,356 course titles, covering 88% of CSC reviews posted since 2024. Unmapped courses fall back to the professor's overall rating rather than showing nothing.
 
 ## Prerequisites
 
@@ -73,10 +94,11 @@ npm run build
 ## Data and security rules
 
 - Do not add API keys, secrets, or private student data to the extension bundle.
-- Do not replace mock data with PolyRatings data until the team has an authorized, documented source and has reviewed its terms.
+- PolyRatings and its data repository are **AGPL-3.0**. `robots.txt` permits crawling outside `/login` and `/admin`, and no policy on third-party API use is stated anywhere in the repo, site, or FAQ — permission is neither granted nor denied. Ask before distributing to students: GitHub issues, `dev@polyratings.dev`, or their Discord.
 - Keep student preferences in `chrome.storage.local`.
 - The AI summary interface is deliberately server-side only; a browser extension must never carry an AI provider secret.
-- **This build shows invented ratings for real instructors on the live portal, with no on-card disclaimer.** The demo-data banners were removed from both the popup and the hover card, so nothing on screen tells a viewer the ratings are fabricated. The only remaining safeguard is exact, unambiguous name matching. Do not distribute to students and do not screenshot it for an audience that may read the ratings as real. Before any student-facing release, wire an authorized data source or set `useMockData` back to `isFixtureDocument(document)` in `src/content/content-script.ts`.
+- **The hover card now shows real reviews written about real professors.** Ratings are no longer invented there, so the earlier fabrication risk is gone, but real review text can be blunt or personal. Name matching still requires an unambiguous match: two different people share a full name in the data (Chris Clark in CSC and CRP), and such a tie deliberately resolves to no match rather than guessing.
+- **The popup still shows invented ratings for real faculty names with no on-card disclaimer.** That surface has not been migrated; do not screenshot it for an audience that may read the ratings as real.
 
 ## Release notes
 

@@ -1,3 +1,5 @@
+import { findCourseCodes, isKnownCourseCode, normalizeCourseCode } from "../data/course-crosswalk";
+
 export interface InstructorCandidate {
   element: HTMLElement;
   sectionElement: HTMLElement | null;
@@ -33,15 +35,71 @@ function findSectionContainer(element: HTMLElement): HTMLElement | null {
   const sectionList = element.closest<HTMLElement>("[role='group'][aria-label='Section List'], [aria-label='Class Schedule']");
   const listItem = element.closest<HTMLElement>("li");
   if (sectionList && listItem && sectionList.contains(listItem)) return listItem;
+  // A tabular schedule puts one class per row, which is the smallest scope that
+  // still holds both the instructor cell and the course cell.
+  const row = element.closest<HTMLElement>("tr, [role='row']");
+  if (sectionList && row && sectionList.contains(row)) return row;
   // My Schedule uses definition lists within course cards rather than section
   // list items. The nearest list gives us the smallest semantic course scope.
   if (sectionList?.matches("[aria-label='Class Schedule']")) return element.closest<HTMLElement>("dl");
   return element.closest<HTMLElement>("[data-polyratings-course-row]");
 }
 
+const courseLabels = new Set(["course", "class", "subject", "catalog nbr", "catalog number", "course id"]);
+
+function isCourseLabel(label: HTMLElement): boolean {
+  return courseLabels.has(normalizedText(label).replace(/:$/, ""));
+}
+
+/**
+ * Finds the course a section belongs to. Explicit and semantic sources are
+ * trusted as-is; a loose scan of the section's text is only accepted when the
+ * result is a course the catalog actually lists, so row numbers, room numbers,
+ * and unit counts cannot be mistaken for a course code.
+ */
+export function findCourseCode(section: HTMLElement): string | null {
+  const marked = section.querySelector<HTMLElement>("[data-polyratings-course-code]");
+  if (marked?.textContent) return normalizeCourseCode(marked.textContent);
+
+  for (const label of section.querySelectorAll<HTMLElement>("dt")) {
+    if (!isCourseLabel(label)) continue;
+    const value = findAssociatedValue(label);
+    const code = value && normalizeCourseCode(extractInstructorText(value));
+    if (code) return code;
+  }
+
+  const headings = section.querySelectorAll<HTMLElement>("h1, h2, h3, h4, h5, h6, [role='heading'], summary, legend, caption");
+  for (const heading of headings) {
+    const code = normalizeCourseCode(extractInstructorText(heading));
+    if (code) return code;
+  }
+
+  for (const labelled of [section, ...section.querySelectorAll<HTMLElement>("[aria-label]")]) {
+    const label = labelled.getAttribute("aria-label") ?? "";
+    // Skip the label this extension writes onto a bound row, so a rescan does
+    // not read back its own output.
+    if (label.includes("PolyProf")) continue;
+    const code = normalizeCourseCode(label);
+    if (code) return code;
+  }
+
+  return findCourseCodes(spacedText(section)).find(isKnownCourseCode) ?? null;
+}
+
+/**
+ * Joins text nodes with a space. Adjacent table cells carry no whitespace
+ * between them in the source markup, so a plain concatenation would read
+ * "CSC 4880Kurfess,Franz J" and hide the course code.
+ */
+function spacedText(element: HTMLElement): string {
+  const parts: string[] = [];
+  const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) parts.push(walker.currentNode.textContent ?? "");
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
 export function createInstructorCandidate(element: HTMLElement, instructorName?: string, source?: InstructorDetectionSource): InstructorCandidate {
   const sectionElement = findSectionContainer(element);
-  const courseElement = sectionElement?.querySelector<HTMLElement>("[data-polyratings-course-code]");
   const displayName = extractInstructorText(element);
   const normalizedAttributeName = element.getAttribute("data-name")?.trim();
   return {
@@ -50,7 +108,7 @@ export function createInstructorCandidate(element: HTMLElement, instructorName?:
     // data-name is the observed, normalized PeopleSoft value; text is a safe fallback.
     instructorName: instructorName || normalizedAttributeName || displayName,
     displayName: instructorName || displayName || normalizedAttributeName || "Instructor",
-    courseCode: courseElement?.textContent?.replace(/\s+/g, " ").trim() ?? null,
+    courseCode: sectionElement ? findCourseCode(sectionElement) : null,
     source,
   };
 }

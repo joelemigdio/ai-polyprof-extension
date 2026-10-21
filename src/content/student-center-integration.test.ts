@@ -8,21 +8,36 @@ import { StudentCenterIntegration } from "./student-center-integration";
 
 const professor: Professor = {
   id: "fixture-ada",
-  name: "Dr. Ada Lovelace",
-  department: "Computer Science",
+  name: "Ada Lovelace",
+  firstName: "Ada",
+  lastName: "Lovelace",
+  department: "CSC",
   courses: ["CSC 4880"],
-  starRating: 4.6,
-  peerRating: 4.4,
+  starRating: 3.6,
+  clarityRating: 3.4,
+  supportRating: 3.2,
   reviewCount: 2,
+  tags: ["Uploads Slides"],
   traits: ["project-heavy", "clear-grading"],
   weakTraits: [],
-  reviews: [{ id: "review-1", courseCode: "CSC 4880", classYear: "Senior", rating: 5, text: "Clear lectures." }],
+  reviews: [
+    {
+      id: "review-1",
+      courseCode: "CSC 4880",
+      classYear: "Senior",
+      rating: 4,
+      text: "Clear lectures.",
+      grade: "A",
+      courseType: "Major (Required)",
+      postDate: "2026-02-01T00:00:00.000Z",
+    },
+  ],
 };
 
 function setFixture(markup: string): StudentCenterIntegration {
   document.documentElement.setAttribute("data-polyratings-fixture", "");
   document.body.innerHTML = markup;
-  const integration = new StudentCenterIntegration({ document, professors: [professor], useMockData: true });
+  const integration = new StudentCenterIntegration({ document, professors: [professor] });
   integration.start();
   return integration;
 }
@@ -41,6 +56,45 @@ describe("professor detection", () => {
 
   it("refuses ambiguous duplicate-name matches", () => {
     expect(findConfidentProfessor("Dr. Ada Lovelace", [professor, { ...professor, id: "duplicate" }])).toBeNull();
+  });
+});
+
+describe("course number detection", () => {
+  function courseCodeFor(markup: string): string | null {
+    document.body.innerHTML = markup;
+    return findInstructorCandidates(document)[0]?.courseCode ?? null;
+  }
+
+  it("reads a Course field paired with its value", () => {
+    expect(
+      courseCodeFor(
+        `<div aria-label="Section List" role="group"><ul><li><dl><dt>Course</dt><dd>CSC 3449</dd><dt>Instructor</dt><dd>Kurfess,Franz J</dd></dl></li></ul></div>`,
+      ),
+    ).toBe("CSC 3449");
+  });
+
+  it("reads a heading above the section", () => {
+    expect(
+      courseCodeFor(
+        `<div aria-label="Section List" role="group"><ul><li><h3>CSC 2050 - System Software Mechanics</h3><dl><dt>Instructor</dt><dd>Kurfess,Franz J</dd></dl></li></ul></div>`,
+      ),
+    ).toBe("CSC 2050");
+  });
+
+  it("falls back to a catalog-verified code elsewhere in the row", () => {
+    expect(
+      courseCodeFor(
+        `<div aria-label="Class Schedule"><table><thead><tr><th>Class</th><th>Instructor</th></tr></thead><tbody><tr><td>CSC 4880</td><td>Kurfess,Franz J</td></tr></tbody></table></div>`,
+      ),
+    ).toBe("CSC 4880");
+  });
+
+  it("does not mistake times, rooms, or terms for a course code", () => {
+    expect(
+      courseCodeFor(
+        `<div aria-label="Section List" role="group"><ul><li>Section 01 MWF 9:00 Room 1420 FALL 2026<dl><dt>Instructor</dt><dd>Kurfess,Franz J</dd></dl></li></ul></div>`,
+      ),
+    ).toBeNull();
   });
 });
 
@@ -120,7 +174,7 @@ describe("Student Center integration fixture", () => {
     vi.advanceTimersByTime(1);
     const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
     expect(host.hidden).toBe(false);
-    expect(host.shadowRoot?.textContent).toContain("Dr. Ada Lovelace");
+    expect(host.shadowRoot?.textContent).toContain("Ada Lovelace");
     target.dispatchEvent(new Event("pointerleave"));
     host.shadowRoot?.querySelector(".card")?.dispatchEvent(new Event("pointerenter"));
     vi.advanceTimersByTime(200);
@@ -138,7 +192,62 @@ describe("Student Center integration fixture", () => {
     target.dispatchEvent(new Event("pointerenter"));
     vi.advanceTimersByTime(250);
     expect(document.querySelector<HTMLElement>("#polyratings-hover-host")?.hidden).toBe(false);
-    expect(document.querySelector<HTMLElement>("#polyratings-hover-host")?.shadowRoot?.textContent).toContain("Dr. Ada Lovelace");
+    expect(document.querySelector<HTMLElement>("#polyratings-hover-host")?.shadowRoot?.textContent).toContain("Ada Lovelace");
+    integration.stop();
+  });
+
+  it("fills in course-scoped ratings and reviews once the detail fetch resolves", async () => {
+    const index: Professor = { ...professor, reviews: [], reviewCount: 2 };
+    document.documentElement.setAttribute("data-polyratings-fixture", "");
+    // The class on screen carries its semester number; the review is filed
+    // under the quarter number, so only the crosswalk can connect them.
+    document.body.innerHTML = `<div aria-label="Section List" role="group"><li><h3>CSC 4880</h3><dl><dt>Instructor</dt><dd>Lovelace,Ada</dd></dl></li></div>`;
+    const quarterReview = { ...professor.reviews[0], courseCode: "CSC 480" };
+    const integration = new StudentCenterIntegration({
+      document,
+      professors: [index],
+      details: { getProfessorDetail: async () => ({ ...professor, reviews: [quarterReview] }) },
+    });
+    integration.start();
+
+    document.querySelector<HTMLElement>("[data-polyratings-hover-target]")!.click();
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    expect(host.shadowRoot?.textContent).toContain("Loading CSC 4880 reviews");
+
+    await vi.waitFor(() => expect(host.shadowRoot?.textContent).toContain("In CSC 4880: ★ 4.00 from 1 review"));
+    // The header title comes from the catalog crosswalk, not from PolyRatings.
+    expect(host.shadowRoot?.textContent).toContain("Artificial Intelligence");
+    integration.stop();
+  });
+
+  it("keeps an open professor detail view open when reviews finish loading", async () => {
+    const index: Professor = { ...professor, reviews: [] };
+    document.documentElement.setAttribute("data-polyratings-fixture", "");
+    document.body.innerHTML = `<div aria-label="Section List" role="group"><li><span class="prof-name" data-name="Lovelace,Ada">Lovelace,Ada</span></li></div>`;
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const integration = new StudentCenterIntegration({
+      document,
+      professors: [index],
+      details: {
+        getProfessorDetail: async () => {
+          await gate;
+          return professor;
+        },
+      },
+    });
+    integration.start();
+
+    document.querySelector<HTMLElement>("[data-polyratings-hover-target]")!.click();
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    host.shadowRoot?.querySelector<HTMLButtonElement>(".prof")?.click();
+    expect(host.shadowRoot?.textContent).toContain("Back to professors");
+
+    release?.();
+    await vi.waitFor(() => expect(host.shadowRoot?.textContent).toContain("Clear lectures."));
+    expect(host.shadowRoot?.textContent).toContain("Back to professors");
     integration.stop();
   });
 
@@ -150,7 +259,7 @@ describe("Student Center integration fixture", () => {
     expect(host.shadowRoot?.textContent).toContain("Personalized summary");
 
     host.shadowRoot?.querySelector<HTMLButtonElement>(".prof")?.click();
-    expect(host.shadowRoot?.textContent).toContain("Top reviews");
+    expect(host.shadowRoot?.textContent).toContain("Reviews (2 total)");
     expect(host.shadowRoot?.textContent).toContain("Clear lectures.");
 
     host.shadowRoot?.querySelector<HTMLButtonElement>(".back")?.click();
@@ -168,7 +277,9 @@ describe("Student Center integration fixture", () => {
     const second: Professor = {
       ...professor,
       id: "fixture-grace",
-      name: "Dr. Grace Hopper",
+      name: "Grace Hopper",
+      firstName: "Grace",
+      lastName: "Hopper",
       traits: ["labs"],
     };
     document.documentElement.setAttribute("data-polyratings-fixture", "");
@@ -176,7 +287,6 @@ describe("Student Center integration fixture", () => {
     const integration = new StudentCenterIntegration({
       document,
       professors: [professor, second],
-      useMockData: true,
       preferences: { ...createDefaultPreferences(), learningStyles: ["project-heavy"] },
     });
     integration.start();
@@ -184,10 +294,10 @@ describe("Student Center integration fixture", () => {
     document.querySelector<HTMLElement>("[data-polyratings-hover-target]")!.click();
     const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
     expect(host.shadowRoot?.querySelectorAll(".prof")).toHaveLength(2);
-    expect(host.shadowRoot?.textContent).toContain("Dr. Ada Lovelace fits best");
+    expect(host.shadowRoot?.textContent).toContain("Ada Lovelace fits best");
 
     integration.updatePreferences({ ...createDefaultPreferences(), learningStyles: ["labs"] });
-    expect(host.shadowRoot?.textContent).toContain("Dr. Grace Hopper fits best");
+    expect(host.shadowRoot?.textContent).toContain("Grace Hopper fits best");
     integration.stop();
   });
 

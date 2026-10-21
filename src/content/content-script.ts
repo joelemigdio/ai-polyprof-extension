@@ -1,4 +1,4 @@
-import { mockProfessorDataService } from "../services/mock-professor-data-service";
+import { polyratingsDataService } from "../services/polyratings-data-service";
 import { loadPreferences, normalizePreferences } from "../services/preference-storage";
 import { DevelopmentDiagnostics, ENABLE_DEVELOPMENT_DIAGNOSTICS } from "./development-diagnostics";
 import { StudentCenterIntegration } from "./student-center-integration";
@@ -7,19 +7,16 @@ async function bootstrap(): Promise<void> {
   const diagnostics = ENABLE_DEVELOPMENT_DIAGNOSTICS ? new DevelopmentDiagnostics(document) : undefined;
   try {
     const [professors, preferences] = await Promise.all([
-      mockProfessorDataService.getProfessorResults(),
+      polyratingsDataService.getProfessorResults(),
       loadPreferences(),
     ]);
 
     const integration = new StudentCenterIntegration({
       document,
       professors,
+      details: polyratingsDataService,
       preferences,
       diagnostics,
-      // Invented ratings are shown for real matched instructors on the live portal,
-      // now with no on-card disclaimer. Set this back to isFixtureDocument(document)
-      // before any student-facing release.
-      useMockData: true,
     });
     integration.start();
 

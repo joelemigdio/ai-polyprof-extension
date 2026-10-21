@@ -2,13 +2,17 @@
   "manifest_version": 3,
   "name": "PolyProf",
   "version": "0.3.0",
-  "description": "Compare Cal Poly professors by rating, similar-student feedback, and your own learning-style preferences.",
+  "description": "Compare Cal Poly professors using PolyRatings reviews for the exact class you are looking at.",
   "action": {
     "default_title": "PolyProf",
     "default_popup": "index.html"
   },
   "permissions": ["storage"],
-  "host_permissions": ["https://cmsweb.pscs.calpoly.edu/psc/*"],
+  "host_permissions": ["https://cmsweb.pscs.calpoly.edu/psc/*", "https://api-prod.polyratings.org/*"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
   "content_scripts": [
     {
       "matches": ["https://cmsweb.pscs.calpoly.edu/psc/*"],

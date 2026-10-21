@@ -20,7 +20,7 @@ export function ClassCard({ course, topProfessor, match, onSelect }: ClassCardPr
           <h2 className="card-title">{course.code}</h2>
           <p className="card-subtitle">{course.title} • {topProfessor.name}</p>
         </div>
-        <RatingPills starRating={topProfessor.starRating} peerRating={topProfessor.peerRating} />
+        <RatingPills starRating={topProfessor.starRating} clarityRating={topProfessor.clarityRating} />
       </div>
       <hr className="card-divider" />
       <p className="fit-line">
