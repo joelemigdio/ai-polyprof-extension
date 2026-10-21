@@ -74,6 +74,14 @@
 .identity { min-width: 0; }
 .fit { font-size: 12px; margin: 8px 0 0; }
 
+.course-line {
+  color: var(--green-900);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 6px 0 0;
+}
+.course-line.muted { color: var(--muted); font-weight: 400; }
+
 .pills { display: flex; flex-shrink: 0; gap: 5px; }
 .pill {
   border-radius: 7px;

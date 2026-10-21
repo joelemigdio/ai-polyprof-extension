@@ -1,6 +1,6 @@
 # Student Center Adapter Assumptions
 
-The extension content script is scoped to `https://cmsweb.pscs.calpoly.edu/psc/*`, the PeopleSoft application path. It requests no access to other websites and does not read, store, transmit, or alter Student Center records.
+The extension content script is scoped to `https://cmsweb.pscs.calpoly.edu/psc/*`, the PeopleSoft application path. It does not read, store, transmit, or alter Student Center records. The extension also holds host permission for `https://api-prod.polyratings.org/*`, which the background service worker uses to read public professor ratings; nothing from the portal is ever sent there.
 
 ## What is verified
 
@@ -8,9 +8,19 @@ The adapter has verified DOM evidence for `span.prof-name[data-name]`, Schedule 
 
 `groupCandidatesIntoRows` groups detected instructors by their section for card content, but creates one hover target for each visible instructor value. This keeps the interaction limited to the instructor name while allowing a shared card to list every professor teaching that course. Instructors outside a recognizable section keep their own card grouping instead of being dropped. Grouping consumes the candidates from a single `findInstructorDetection` pass, so detection counts reported to diagnostics and the bound targets always agree.
 
-## Demo data on live pages
+## Real PolyRatings data on live pages
 
-The content script restricts demo ratings to pages marked as a local fixture. Real Student Center instructors always use the no-data path until an authorized PolyRatings data source is available. Exact normalized matching remains in place for fixture demonstrations and prevents ambiguous names from being associated with another professor.
+The content script loads the real professor index from `api-prod.polyratings.org` through the background service worker and resolves each detected instructor against it. The bundled demonstration dataset remains available only to local fixtures; it is never used on a real Student Center page.
+
+Name resolution is in `professor-detection.ts` and handles the formats the portal actually renders: `Kurfess,Franz J`, `Kurfess, Franz`, `Franz Kurfess`, `Dr. Franz Kurfess`, and a bare surname. It compares against PolyRatings' separate `firstName`/`lastName` fields, folds away diacritics and punctuation, and accepts a lone initial for a given name. The safety rule is unchanged: a match is used only when exactly one professor fits. Two different people share a full name in the real data (Chris Clark in CSC and CRP), so a tie resolves to the no-data state rather than guessing.
+
+## Course numbers
+
+`findCourseCode` resolves the course a section belongs to, in priority order: a `[data-polyratings-course-code]` marker, a `<dt>` labelled Course/Class/Subject/Catalog Nbr paired with its value, a heading inside the section, an `aria-label`, and finally a loose scan of the section's text. The loose scan is only trusted when the candidate is a course the catalog actually lists, so section numbers, room numbers, times, and terms cannot be mistaken for a course code. Labels this extension writes itself are skipped so a rescan cannot read back its own output.
+
+Because Cal Poly renumbered every course for Fall 2026, the detected code is expanded through the generated crosswalk before reviews are matched — `CSC 2050` also looks under `CSC 357` and `CPE 357`. A course with no mapping still shows the professor's overall rating.
+
+A tabular schedule now uses the `<tr>` as its section container, so a row's instructor cell and course cell are scoped together.
 
 ## What is intentionally not assumed
 

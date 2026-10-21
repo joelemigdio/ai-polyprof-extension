@@ -61,7 +61,7 @@ export function ResultsScreen({ course, professors, preferences, onSelectProfess
               <p className="ai-pick-meta">{recommended.department} • {recommended.courses.join(", ")}</p>
               <p className="ai-pick-reason">{buildRecommendationReason(recommended, preferences)}</p>
             </div>
-            <RatingPills starRating={recommended.starRating} peerRating={recommended.peerRating} />
+            <RatingPills starRating={recommended.starRating} clarityRating={recommended.clarityRating} />
           </div>
 
           <div className="panel-actions">

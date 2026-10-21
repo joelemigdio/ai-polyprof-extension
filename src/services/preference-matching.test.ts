@@ -7,11 +7,15 @@ function professor(overrides: Partial<Professor> = {}): Professor {
   return {
     id: "test",
     name: "Test Professor",
-    department: "Computer Science",
+    firstName: "Test",
+    lastName: "Professor",
+    department: "CSC",
     courses: ["CSC 101"],
-    starRating: 4,
-    peerRating: 4,
+    starRating: 3.2,
+    clarityRating: 3.2,
+    supportRating: 3,
     reviewCount: 10,
+    tags: [],
     traits: ["project-heavy", "clear-grading"],
     weakTraits: [],
     reviews: [],
@@ -67,8 +71,8 @@ describe("matchProfessor", () => {
 
 describe("rankProfessors", () => {
   it("reorders when the student changes their learning style", () => {
-    const labsFocused = professor({ id: "labs", traits: ["labs"], starRating: 3.5, peerRating: 3.5 });
-    const projectFocused = professor({ id: "projects", traits: ["project-heavy"], starRating: 3.5, peerRating: 3.5 });
+    const labsFocused = professor({ id: "labs", traits: ["labs"], starRating: 3.5, clarityRating: 3.5 });
+    const projectFocused = professor({ id: "projects", traits: ["project-heavy"], starRating: 3.5, clarityRating: 3.5 });
     const pool = [labsFocused, projectFocused];
 
     expect(rankProfessors(pool, preferences({ learningStyles: ["labs"] }))[0].id).toBe("labs");
@@ -76,8 +80,8 @@ describe("rankProfessors", () => {
   });
 
   it("breaks ties using the similar-student rating", () => {
-    const lowPeer = professor({ id: "low", peerRating: 3 });
-    const highPeer = professor({ id: "high", peerRating: 4.9 });
+    const lowPeer = professor({ id: "low", clarityRating: 3 });
+    const highPeer = professor({ id: "high", clarityRating: 4.9 });
 
     expect(rankProfessors([lowPeer, highPeer], preferences())[0].id).toBe("high");
   });

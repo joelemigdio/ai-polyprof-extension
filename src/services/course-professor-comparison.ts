@@ -1,9 +1,8 @@
 import type { CourseInstructor, CourseProfessorComparison, Professor } from "../models/professor";
+import { findConfidentProfessor } from "../content/professor-detection";
 
 function findProviderProfessor(instructorName: string, professors: Professor[]): Professor | null {
-  const normalized = instructorName.replace(/\s+/g, " ").trim().toLocaleLowerCase();
-  const matches = professors.filter((professor) => professor.name.replace(/\s+/g, " ").trim().toLocaleLowerCase() === normalized);
-  return matches.length === 1 ? matches[0] : null;
+  return findConfidentProfessor(instructorName, professors);
 }
 
 /**

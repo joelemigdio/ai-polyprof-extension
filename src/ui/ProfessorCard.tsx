@@ -17,7 +17,7 @@ export function ProfessorCard({ professor, match, onSelect }: ProfessorCardProps
           <h2 className="card-title">{professor.name}</h2>
           <p className="card-subtitle">{professor.department} • {professor.courses.join(", ")}</p>
         </div>
-        <RatingPills starRating={professor.starRating} peerRating={professor.peerRating} />
+        <RatingPills starRating={professor.starRating} clarityRating={professor.clarityRating} />
       </div>
       <hr className="card-divider" />
       <p className="fit-line">

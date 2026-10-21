@@ -1,4 +1,4 @@
-import type { Professor } from "../models/professor";
+import { ratingScaleMax, type Professor } from "../models/professor";
 import {
   traitFitPhrase,
   traitLabel,
@@ -46,7 +46,7 @@ export function matchProfessor(professor: Professor, preferences: StudentPrefere
   }
 
   const overlap = matchedTraits.length / selected.length;
-  const ratingStrength = (professor.starRating + professor.peerRating) / 10;
+  const ratingStrength = (professor.starRating + professor.clarityRating) / (2 * ratingScaleMax);
   const matchPercent = Math.round(100 * (overlapWeight * overlap + ratingWeight * ratingStrength));
 
   return {
@@ -83,7 +83,7 @@ export function rankProfessors(professors: Professor[], preferences: StudentPref
     const leftMatch = matchProfessor(left, preferences).matchPercent ?? 0;
     const rightMatch = matchProfessor(right, preferences).matchPercent ?? 0;
     if (leftMatch !== rightMatch) return rightMatch - leftMatch;
-    return right.peerRating - left.peerRating;
+    return right.clarityRating - left.clarityRating;
   });
 }
 
