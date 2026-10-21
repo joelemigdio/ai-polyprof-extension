@@ -1,7 +1,7 @@
 import { mockProfessorDataService } from "../services/mock-professor-data-service";
 import { loadPreferences, normalizePreferences } from "../services/preference-storage";
 import { DevelopmentDiagnostics, ENABLE_DEVELOPMENT_DIAGNOSTICS } from "./development-diagnostics";
-import { StudentCenterIntegration } from "./student-center-integration";
+import { isFixtureDocument, StudentCenterIntegration } from "./student-center-integration";
 
 async function bootstrap(): Promise<void> {
   const diagnostics = ENABLE_DEVELOPMENT_DIAGNOSTICS ? new DevelopmentDiagnostics(document) : undefined;
@@ -16,10 +16,8 @@ async function bootstrap(): Promise<void> {
       professors,
       preferences,
       diagnostics,
-      // Invented ratings are shown for real matched instructors on the live portal,
-      // now with no on-card disclaimer. Set this back to isFixtureDocument(document)
-      // before any student-facing release.
-      useMockData: true,
+      // Real Student Center instructors must not be paired with mock ratings.
+      useMockData: isFixtureDocument(document),
     });
     integration.start();
 
