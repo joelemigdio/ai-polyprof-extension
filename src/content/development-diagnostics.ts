@@ -1,8 +1,9 @@
 /**
- * Development-only integration diagnostics. Set this false (or remove this
- * module) before a release. It records no page content or student data.
+ * Development-only integration diagnostics. Keep this false in normal builds
+ * so the Student Center never displays a script-loader badge. It records no
+ * page content or student data when explicitly enabled for local debugging.
  */
-export const ENABLE_DEVELOPMENT_DIAGNOSTICS = true;
+export const ENABLE_DEVELOPMENT_DIAGNOSTICS = false;
 
 export interface IntegrationDiagnostics {
   instructorFieldsFound(count: number): void;

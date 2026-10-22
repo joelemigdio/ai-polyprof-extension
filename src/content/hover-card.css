@@ -15,11 +15,12 @@
   border-radius: 12px;
   box-shadow: 0 10px 30px rgb(30 61 47 / 24%);
   color: var(--green-900);
+  display: flex;
+  flex-direction: column;
   font: 13px/1.45 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
   max-height: min(420px, calc(100vh - 24px));
   overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow-y: hidden;
   width: min(340px, calc(100vw - 16px));
 }
 
@@ -32,9 +33,13 @@
   gap: 10px;
   justify-content: space-between;
   padding: 10px 12px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 .head h2 { font-size: 14px; font-weight: 700; margin: 0; }
 .head .sub { display: block; font-size: 11px; font-weight: 500; opacity: 0.8; }
+.head > div { min-width: 0; }
 .close {
   background: rgb(255 255 255 / 12%);
   border: 0;
@@ -47,7 +52,18 @@
 }
 .close:hover { background: rgb(255 255 255 / 22%); }
 
-.body { display: grid; gap: 9px; padding: 11px 12px 12px; }
+.body {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 9px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 11px 12px 12px;
+  scrollbar-gutter: stable;
+}
+.body > * { min-width: 0; }
 
 .prof {
   background: #fff;
@@ -170,23 +186,26 @@
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 10px;
+  min-width: 0;
   padding: 11px;
 }
 .detail-card h3 { font-size: 12px; margin: 0 0 7px; }
-.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
 .tag {
   background: #e4ede7;
   border-radius: 999px;
   color: #28523d;
   font-size: 11px;
   font-weight: 600;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   padding: 4px 9px;
 }
-.review { border-top: 1px solid var(--border); padding-top: 9px; }
+.review { border-top: 1px solid var(--border); min-width: 0; padding-top: 9px; }
 .review:first-of-type { border-top: 0; padding-top: 0; }
 .review-head { align-items: center; display: flex; gap: 8px; justify-content: space-between; }
 .review-origin { font-size: 12px; font-weight: 700; }
-.review p { font-size: 12px; line-height: 1.45; margin: 6px 0 9px; }
+.review p { font-size: 12px; line-height: 1.45; margin: 6px 0 9px; overflow-wrap: anywhere; }
 
 .prof:focus-visible, .close:focus-visible, .back:focus-visible {
   outline: 3px solid #e3b23c;

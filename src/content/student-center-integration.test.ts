@@ -585,7 +585,12 @@ describe("Student Center integration fixture", () => {
     const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
     const card = host.shadowRoot?.querySelector<HTMLElement>(".card")!;
     expect(card.style.maxHeight).toBe("420px");
-    expect(card.style.overflowY).toBe("auto");
+    expect(card.style.height).toBe("420px");
+    expect(card.style.overflowY).toBe("hidden");
+    // Review content scrolls inside the card body, leaving Close in the
+    // persistent header rather than allowing the entire overlay to overflow.
+    expect(host.shadowRoot?.querySelector<HTMLElement>(".body")).toBeTruthy();
+    expect(host.shadowRoot?.querySelector<HTMLButtonElement>(".close")).toBeTruthy();
     expect(host.style.top).toBe("8px");
 
     targetTop = 440;

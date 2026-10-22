@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="469b6b4f-8071-485c-ac9f-85a71f075115" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/Screenshot 2026-10-21 at 2.54.43 PM.png" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/polyprof-0.3.0.zip" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/scripts/build-course-crosswalk.mjs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/background/service-worker.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/content/professor-detection.test.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/data/course-crosswalk.json" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/data/course-crosswalk.test.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/data/course-crosswalk.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/services/polyratings-api.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/services/polyratings-data-service.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/vite.background.config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docs/STUDENT_CENTER_ADAPTER_ASSUMPTIONS.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/STUDENT_CENTER_ADAPTER_ASSUMPTIONS.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/public/manifest.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/content/content-script.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/content/content-script.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/content/hover-card.css" beforeDir="false" afterPath="$PROJECT_DIR$/src/content/hover-card.css" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/content/professor-detection.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/content/professor-detection.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/content/student-center-adapter.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/content/student-center-adapter.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/content/student-center-integration.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/content/student-center-integration.test.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/content/student-center-integration.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/content/student-center-integration.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/models/professor.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/models/professor.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/mock-professor-data-service.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/mock-professor-data-service.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/preference-matching.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/preference-matching.test.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/preference-matching.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/preference-matching.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/professor-data-service.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/professor-data-service.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/ClassCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/ClassCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/ProfessorCard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/ProfessorCard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/RatingPills.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/RatingPills.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/ui/ResultsScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/ui/ResultsScreen.tsx" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 7
+}]]></component>
+  <component name="ProjectId" id="3L1bFK4Nr3pfiuoqiKwo5oaWCn7" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.OpenProjectViewOnStart": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "git-widget-placeholder": "Merging main"
+  }
+}]]></component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-50da183f06c8-d3b881c8e49f-com.jetbrains.pycharm.community.sharedIndexes.bundled-PC-233.13135.95" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="469b6b4f-8071-485c-ac9f-85a71f075115" name="Changes" comment="" />
+      <created>1792624415384</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1792624415384</updated>
+    </task>
+    <servers />
+  </component>
+</project>

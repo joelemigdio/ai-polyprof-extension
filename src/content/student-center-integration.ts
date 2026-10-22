@@ -418,8 +418,22 @@ export class StudentCenterIntegration {
     const viewportWidth = viewport?.innerWidth ?? window.innerWidth;
     const viewportHeight = viewport?.innerHeight ?? window.innerHeight;
     const maxHeight = Math.max(1, Math.min(maxCardHeight, viewportHeight - (viewportPadding * 2 + cardGap)));
+
+    // A max-height alone does not give a flex child a definite size. With a
+    // long detail view that meant the review body could grow past the card
+    // instead of becoming the scrollable region. Measure the natural card
+    // first, then give it a concrete viewport-bounded height so `.body` can
+    // take the remaining space and scroll internally.
+    card.style.height = "auto";
+    card.style.maxHeight = "none";
+    const naturalRect = card.getBoundingClientRect();
+    const naturalHeight = Math.max(card.scrollHeight, naturalRect.height);
+    const boundedHeight = Math.min(Math.max(1, naturalHeight || maxHeight), maxHeight);
     card.style.maxHeight = `${maxHeight}px`;
-    card.style.overflowY = "auto";
+    card.style.height = `${boundedHeight}px`;
+    // The header stays visible; each rendered card body owns the review list's
+    // internal scroll position so long detail views never escape the viewport.
+    card.style.overflowY = "hidden";
 
     const targetRect = row.element.getBoundingClientRect();
     const cardRect = card.getBoundingClientRect();
@@ -543,7 +557,7 @@ export class StudentCenterIntegration {
     const title = courseCode ? courseTitle(courseCode) : undefined;
     this.renderHead(
       card,
-      courseCode ?? "This class",
+      courseCode ?? "Professor ratings",
       title ? `${title} • ${count} ${count === 1 ? "professor" : "professors"}` : `${count} ${count === 1 ? "professor" : "professors"}`,
       showClose,
     );
