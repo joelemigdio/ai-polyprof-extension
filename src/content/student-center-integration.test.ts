@@ -601,6 +601,44 @@ describe("Student Center integration fixture", () => {
     integration.stop();
   });
 
+  it("keeps a hover-open course card visible while Compare Professors is clicked", () => {
+    vi.useFakeTimers();
+    const integration = setFixture(`<main aria-label="Class Schedule" role="treegrid"><div role="row"><div role="columnheader">Class</div><div role="columnheader">Description</div><div role="columnheader">Instructor</div></div><div role="row" data-row-id="course-1"><div role="gridcell" header="Class">CSC 4880</div><div role="gridcell" header="Description">Artificial Intelligence</div><div role="gridcell" header="Instructor"><span aria-hidden="false">Dr. Ada Lovelace</span></div></div></main>`);
+    const courseTarget = document.querySelector<HTMLElement>("[data-polyratings-course-hover-target]")!;
+    courseTarget.dispatchEvent(new Event("pointerenter"));
+    vi.advanceTimersByTime(250);
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    const compare = host.shadowRoot?.querySelector<HTMLButtonElement>(".compare")!;
+
+    // Simulates clicking the card after leaving its page target. The action
+    // must cancel the pending hover hide before click runs.
+    courseTarget.dispatchEvent(new Event("pointerleave"));
+    compare.dispatchEvent(new Event("pointerdown", { bubbles: true, cancelable: true, composed: true }));
+    compare.click();
+    vi.advanceTimersByTime(200);
+
+    expect(host.hidden).toBe(false);
+    expect(host.shadowRoot?.textContent).toContain("Professor comparison");
+    integration.stop();
+  });
+
+  it("does not hide when Compare Professors replaces its focused button", () => {
+    vi.useFakeTimers();
+    const integration = setFixture(`<main aria-label="Class Schedule" role="treegrid"><div role="row"><div role="columnheader">Class</div><div role="columnheader">Description</div><div role="columnheader">Instructor</div></div><div role="row" data-row-id="course-1"><div role="gridcell" header="Class">CSC 4880</div><div role="gridcell" header="Description">Artificial Intelligence</div><div role="gridcell" header="Instructor"><span aria-hidden="false">Dr. Ada Lovelace</span></div></div></main>`);
+    document.querySelector<HTMLElement>("[data-polyratings-course-hover-target]")!.click();
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    host.shadowRoot?.querySelector<HTMLButtonElement>(".compare")!.click();
+
+    // Chrome emits focusout when the focused action is removed during the
+    // in-place render. That event is internal, not a request to dismiss.
+    host.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+    vi.advanceTimersByTime(200);
+
+    expect(host.hidden).toBe(false);
+    expect(host.shadowRoot?.textContent).toContain("Professor comparison");
+    integration.stop();
+  });
+
   it("uses provider-backed ratings for real Student Center course cards and switches cleanly to a professor card", () => {
     document.body.innerHTML = `<main aria-label="Class Schedule" role="treegrid"><div role="row"><div role="columnheader">Class</div><div role="columnheader">Description</div><div role="columnheader">Instructor</div></div><div role="row" data-row-id="course-1"><div role="gridcell" header="Class">CSC 4880</div><div role="gridcell" header="Description">Artificial Intelligence</div><div role="gridcell" header="Instructor"><span aria-hidden="false">Dr. Ada Lovelace</span></div></div></main>`;
     const integration = new StudentCenterIntegration({ document, professors: [professor], useMockData: false });
@@ -1044,6 +1082,34 @@ describe("saving a class from the hover card", () => {
     expect(button.className).toContain("is-saved");
     expect(button.getAttribute("aria-pressed")).toBe("true");
     expect(button.textContent).toContain("Saved");
+    integration.stop();
+  });
+
+  it("keeps a hover-open card visible while saving a favorite", () => {
+    vi.useFakeTimers();
+    const { integration, target, host } = openCard({ document, professors: [professor] });
+    const favorite = host.shadowRoot?.querySelector<HTMLButtonElement>(".favorite")!;
+
+    target.dispatchEvent(new Event("pointerleave"));
+    favorite.dispatchEvent(new Event("pointerdown", { bubbles: true, cancelable: true, composed: true }));
+    favorite.click();
+    vi.advanceTimersByTime(200);
+
+    expect(host.hidden).toBe(false);
+    expect(host.shadowRoot?.querySelector(".favorite")?.className).toContain("is-saved");
+    integration.stop();
+  });
+
+  it("does not hide when Save replaces its focused button", () => {
+    vi.useFakeTimers();
+    const { integration, host } = openCard({ document, professors: [professor] });
+    host.shadowRoot?.querySelector<HTMLButtonElement>(".favorite")!.click();
+
+    host.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+    vi.advanceTimersByTime(200);
+
+    expect(host.hidden).toBe(false);
+    expect(host.shadowRoot?.querySelector(".favorite")?.className).toContain("is-saved");
     integration.stop();
   });
 

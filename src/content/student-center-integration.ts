@@ -97,6 +97,8 @@ export class StudentCenterIntegration {
   private host: HTMLElement | null = null;
   /** Guards the row's focus handler while focus is restored after an Escape. */
   private suppressFocusOpen = false;
+  /** Ignores focusout emitted when a card action replaces its focused button. */
+  private suppressFocusHide = 0;
   private preferences: StudentPreferences;
   private favoriteIds: Set<string>;
   private readonly useMockData: boolean;
@@ -217,7 +219,7 @@ export class StudentCenterIntegration {
     row.element.addEventListener("blur", (event) => {
       // Tabbing into the card must not hide the thing being tabbed into.
       const next = (event as FocusEvent).relatedTarget;
-      if (next instanceof Node && this.host?.contains(next)) return;
+      if (this.nodeIsInsideOpenCard(next)) return;
       this.scheduleHide();
     });
     row.element.addEventListener("click", () => {
@@ -377,8 +379,12 @@ export class StudentCenterIntegration {
   }
 
   private focusIsInsideCard(): boolean {
-    const active = this.options.document.activeElement;
-    return Boolean(active && this.host && (active === this.host || this.host.contains(active)));
+    return this.nodeIsInsideOpenCard(this.options.document.activeElement);
+  }
+
+  private nodeIsInsideOpenCard(node: EventTarget | null): boolean {
+    if (!this.host || !(node instanceof Node)) return false;
+    return node === this.host || this.host.contains(node) || this.host.shadowRoot?.contains(node) === true;
   }
 
   private firstFocusableInCard(): HTMLElement | null {
@@ -421,11 +427,33 @@ export class StudentCenterIntegration {
       this.handleCloseEvent(event);
       return;
     }
-    if (this.openMode !== "click" || !this.activeRow || this.host?.hidden) return;
+    if (!this.activeRow || this.host?.hidden) return;
     const path = event.composedPath();
-    if (path.includes(this.activeRow.element) || (this.host && path.includes(this.host))) return;
+    if (this.eventTargetsOpenCard(event, path)) {
+      // This listener runs during document capture, before a Shadow-DOM
+      // button receives its own pointerdown/click. Keep the card alive now.
+      this.retainCardForInteraction();
+      return;
+    }
+    if (this.openMode !== "click" || path.includes(this.activeRow.element)) return;
     this.dismissManually();
   };
+
+  /** Shadow-DOM events normally include the host, but checking the card too
+   * keeps controls interactive if a host browser retargets the event path. */
+  private eventTargetsOpenCard(event: Event, path: EventTarget[]): boolean {
+    const card = this.host?.shadowRoot?.querySelector<HTMLElement>(".card");
+    return Boolean(
+      (this.host && (path.includes(this.host) || event.target === this.host))
+      || (card && (path.includes(card) || event.target === card)),
+    );
+  }
+
+  /** A card action turns a transient hover into an intentionally open card. */
+  private retainCardForInteraction(): void {
+    this.cancelHide();
+    if (this.activeRow) this.openMode = "click";
+  }
 
   private handleDocumentClick = (event: Event): void => {
     if (this.eventTargetsCloseControl(event)) this.handleCloseEvent(event);
@@ -546,11 +574,15 @@ export class StudentCenterIntegration {
     card.setAttribute("aria-label", "PolyProf professor information");
     card.tabIndex = -1;
     card.addEventListener("pointerenter", () => this.cancelHide());
+    // Cancels the target's pending hover dismissal before a button click is
+    // delivered, including on pages that retarget Shadow-DOM pointer events.
+    card.addEventListener("pointerdown", () => this.retainCardForInteraction());
     card.addEventListener("pointerleave", () => this.scheduleHide());
     host.addEventListener("focusin", () => this.cancelHide());
     host.addEventListener("focusout", (event) => {
+      if (this.suppressFocusHide > 0) return;
       const next = (event as FocusEvent).relatedTarget;
-      if (next instanceof Node && (this.host?.contains(next) || next === this.activeRow?.element)) return;
+      if (this.nodeIsInsideOpenCard(next) || next === this.activeRow?.element) return;
       this.scheduleHide();
     });
     shadow.append(style, card);
@@ -564,6 +596,13 @@ export class StudentCenterIntegration {
     if (className) node.className = className;
     if (text !== undefined) node.textContent = text;
     return node;
+  }
+
+  /** Replacing focused action controls dispatches focusout in Chrome. */
+  private clearCard(card: HTMLElement): void {
+    this.suppressFocusHide += 1;
+    card.replaceChildren();
+    queueMicrotask(() => { this.suppressFocusHide -= 1; });
   }
 
   private renderHead(card: HTMLElement, title: string, subtitle: string, showClose = true): void {
@@ -614,7 +653,7 @@ export class StudentCenterIntegration {
 
   private renderList(card: HTMLElement, resolved: ResolvedRow, showClose = true): void {
     this.activeProfessorId = null;
-    card.replaceChildren();
+    this.clearCard(card);
     const count = resolved.rated.length + resolved.unratedNames.length;
     const courseCode = resolved.row.courseCode;
     const title = courseCode ? courseTitle(courseCode) : undefined;
@@ -688,6 +727,7 @@ export class StudentCenterIntegration {
     );
     button.addEventListener("click", (event) => {
       event.stopPropagation();
+      this.retainCardForInteraction();
       if (isSaved) this.favoriteIds.delete(id);
       else this.favoriteIds.add(id);
       this.options.onToggleFavorite?.(
@@ -709,7 +749,7 @@ export class StudentCenterIntegration {
   }
 
   private renderCourseList(card: HTMLElement, resolved: ResolvedCourseRow): void {
-    card.replaceChildren();
+    this.clearCard(card);
     this.renderHead(
       card,
       resolved.row.course.code,
@@ -724,13 +764,14 @@ export class StudentCenterIntegration {
       onCompare: (event) => {
         event.preventDefault();
         event.stopPropagation();
+        this.retainCardForInteraction();
         this.renderCourseComparison(card, resolved);
       },
     }));
   }
 
   private renderCourseComparison(card: HTMLElement, resolved: ResolvedCourseRow): void {
-    card.replaceChildren();
+    this.clearCard(card);
     this.renderHead(card, resolved.row.course.code, "Professor comparison");
     card.append(CourseProfessorComparisonView({
       document: this.options.document,
@@ -739,6 +780,7 @@ export class StudentCenterIntegration {
       onBack: (event) => {
         event.preventDefault();
         event.stopPropagation();
+        this.retainCardForInteraction();
         this.renderCourseList(card, resolved);
       },
     }));
@@ -807,7 +849,7 @@ export class StudentCenterIntegration {
 
   private renderDetail(card: HTMLElement, resolved: ResolvedRow, professor: Professor, showClose = true): void {
     this.activeProfessorId = professor.id;
-    card.replaceChildren();
+    this.clearCard(card);
     this.renderHead(card, professor.name, professor.department, showClose);
 
     const body = this.element("div", "body");
