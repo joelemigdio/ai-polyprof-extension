@@ -3,6 +3,7 @@ import {
   traitFitPhrase,
   traitLabel,
   traitWeakPhrase,
+  traitWeights,
   type StudentPreferences,
   type TraitKey,
 } from "../models/preferences";
@@ -45,7 +46,10 @@ export function matchProfessor(professor: Professor, preferences: StudentPrefere
     };
   }
 
-  const overlap = matchedTraits.length / selected.length;
+  // Weighted by the student's ranking, so matching their top style counts for
+  // more than matching their last. Weights already sum to 1.
+  const weights = traitWeights(selected);
+  const overlap = matchedTraits.reduce((sum, key) => sum + (weights.get(key) ?? 0), 0);
   const ratingStrength = (professor.starRating + professor.clarityRating) / (2 * ratingScaleMax);
   const matchPercent = Math.round(100 * (overlapWeight * overlap + ratingWeight * ratingStrength));
 
@@ -102,11 +106,18 @@ export function buildClassSummary(professors: Professor[], preferences: StudentP
   const bestMatch = matchProfessor(best, preferences);
   const styles = formatList(preferences.learningStyles.map((key) => traitLabel(key).toLowerCase()));
 
+  const topPriority = traitLabel(preferences.learningStyles[0]).toLowerCase();
+  const matchesTopPriority = bestMatch.matchedTraits[0] === preferences.learningStyles[0];
+
   const sentences = [
     bestMatch.matchedTraits.length > 0
-      ? `Because you prefer ${styles}, ${best.name} fits best at ${bestMatch.matchPercent}% — ${formatList(bestMatch.matchedTraits.map(traitFitPhrase))}.`
+      ? `Because you ranked ${topPriority} highest${preferences.learningStyles.length > 1 ? ` out of ${styles}` : ""}, ${best.name} fits best at ${bestMatch.matchPercent}% — ${formatList(bestMatch.matchedTraits.map(traitFitPhrase))}.`
       : `None of these professors match ${styles}, so ${best.name} leads on ratings alone at ${bestMatch.matchPercent}%.`,
   ];
+
+  if (bestMatch.matchedTraits.length > 0 && !matchesTopPriority) {
+    sentences.push(`No one here matches your top priority, ${topPriority}.`);
+  }
 
   if (best.weakTraits.length > 0) {
     sentences.push(`Be aware of ${traitWeakPhrase(best.weakTraits[0])} than you prefer.`);
@@ -130,5 +141,11 @@ export function buildRecommendationReason(professor: Professor, preferences: Stu
   if (matchedTraits.length === 0) {
     return `Highest combined rating among your departments, though no selected learning style matched.`;
   }
-  return `Strongest match for ${formatList(matchedTraits.map(traitLabel).map((label) => label.toLowerCase()))}.`;
+  // matchedTraits already follows the student's ranking, so the first entry is
+  // the highest-priority style this professor satisfies.
+  const labels = matchedTraits.map(traitLabel).map((label) => label.toLowerCase());
+  const ranked = preferences.learningStyles.length > 1
+    ? ` — your number ${preferences.learningStyles.indexOf(matchedTraits[0]) + 1} priority`
+    : "";
+  return `Strongest match for ${formatList(labels)}${ranked}.`;
 }

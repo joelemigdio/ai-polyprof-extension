@@ -22,12 +22,13 @@ The hover card reads **real PolyRatings data** from the public read-only API at 
 - **Professor results** — every professor teaching the selected class, ranked, with a pinned AI Recommendation panel explaining the top pick.
 - **Professor detail** — a review summary (themes, strengths, concerns) above the top reviews, tagged by the reviewer's class year.
 - **Favorites** — every saved class in one list with its captured ratings and a one-tap remove, reachable from the star in the header.
-- **Preferences** — department, class time, and learning-style multi-selects plus one-tap quick-preference chips, persisted to `chrome.storage.local`.
+- **Preferences** — department, class time, and learning-style multi-selects, a **priority ranking** for the selected styles, and one-tap quick-preference chips, persisted to `chrome.storage.local`.
 
 ### Throughout
 
 - Dual ratings per professor, both on PolyRatings' native **0-4 scale**: overall rating and "presents material clearly".
-- A deterministic matching service (`src/services/preference-matching.ts`) converts saved preferences into match percentages, fit lines, ranking, class summaries, and recommendation copy. Changing a preference visibly changes all of them.
+- A deterministic matching service (`src/services/preference-matching.ts`) converts saved preferences into match percentages, fit lines, ranking, class summaries, and recommendation copy. Changing *or reordering* a preference visibly changes all of them.
+- Learning styles are **ranked, not just selected**. Their order is the student's priority, and `traitWeights` decays linearly across it — three styles split 50/33/17 — so the top choice outweighs the last.
 - A deterministic review synthesizer (`src/services/review-synthesis.ts`) counts valenced phrases in review text to produce themes, strengths, and concerns. See [How the review summary works](#how-the-review-summary-works).
 
 ## How the review summary works
@@ -47,7 +48,6 @@ Consequences worth knowing:
 - **No AI model is called.** The `AiSummaryService` interface in `src/services/ai-summary-service.ts` has no implementation. The review summary is phrase counting and the fit lines come from a trait vocabulary; the UI says so on both surfaces. A real LLM summary needs a server-side endpoint, since a browser extension must never carry a provider key.
 - **The popup still shows demo data.** Only the in-page hover card reads PolyRatings. Migrating the popup needs a UX decision: its search screen browses courses, and real data has ~3,600 of them rather than four.
 - **Similar-student ratings do not exist.** The second pill shows PolyRatings' "presents material clearly" score. A genuine peer rating would need the student's class standing added to preferences so reviews could be filtered by `gradeLevel`; reviewer *major* is not in PolyRatings data at all, so same-year is the realistic ceiling.
-- **Preferences cannot be ranked by importance.** Every selected learning style is weighted equally.
 - **Five of eight learning-style traits cannot match real data.** PolyRatings tags are logistics ("Uploads Slides", "Recorded Lectures"), not pedagogy. `project-heavy`, `code-evaluation`, `labs`, `clear-grading`, and `light-midterms` have no equivalent, so preference matching fires on only three traits until the vocabulary is migrated.
 - **Compare** is rendered per the design but disabled in the popup; the in-page course card has a comparison view, but it can only substantiate its columns against fixture data.
 - **Class time preferences** are stored but unused in matching.

@@ -56,15 +56,37 @@ export const quickPreferenceKeys: ReadonlyArray<TraitKey> = [
 export interface StudentPreferences {
   version: 2;
   departments: DepartmentCode[];
+  /** Stored for future schedule filtering; not yet used in matching. */
   classTimes: ClassTime[];
+  /**
+   * Ordered most important first. The position is the student's ranking, so
+   * reordering this array is what changes how much each style counts.
+   */
   learningStyles: TraitKey[];
 }
 
+/**
+ * Converts the student's ranking into weights that sum to 1, decaying linearly
+ * so the top choice outweighs the last. With three styles the split is
+ * 50/33/17, which is enough for a reorder to visibly change the ranking.
+ */
+export function traitWeights(styles: TraitKey[]): Map<TraitKey, number> {
+  const total = (styles.length * (styles.length + 1)) / 2;
+  if (total === 0) return new Map();
+  return new Map(styles.map((key, index) => [key, (styles.length - index) / total]));
+}
+
+/**
+ * The defaults are the three traits that PolyRatings tags can actually
+ * substantiate. The previous defaults (project-heavy, code-evaluation, labs)
+ * have no equivalent in real data, so a fresh install matched nothing and
+ * reported that every professor failed every preference.
+ */
 export const defaultStudentPreferences: StudentPreferences = {
   version: 2,
   departments: ["CSC", "CPE"],
   classTimes: ["morning", "afternoon"],
-  learningStyles: ["project-heavy", "code-evaluation", "labs"],
+  learningStyles: ["visual-slides", "responsive", "structured"],
 };
 
 export function createDefaultPreferences(): StudentPreferences {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Professor } from "../models/professor";
 import { createDefaultPreferences, type StudentPreferences } from "../models/preferences";
-import { buildRecommendationReason, matchProfessor, rankProfessors } from "./preference-matching";
+import { buildClassSummary, buildRecommendationReason, matchProfessor, rankProfessors } from "./preference-matching";
 
 function professor(overrides: Partial<Professor> = {}): Professor {
   return {
@@ -92,7 +92,21 @@ describe("buildRecommendationReason", () => {
     const target = professor({ traits: ["project-heavy", "labs"] });
     const reason = buildRecommendationReason(target, preferences({ learningStyles: ["project-heavy", "labs"] }));
 
-    expect(reason).toBe("Strongest match for project-heavy and labs.");
+    expect(reason).toBe("Strongest match for project-heavy and labs — your number 1 priority.");
+  });
+
+  it("names which ranked priority the match actually satisfied", () => {
+    const target = professor({ traits: ["labs"] });
+    const reason = buildRecommendationReason(target, preferences({ learningStyles: ["project-heavy", "labs"] }));
+
+    expect(reason).toBe("Strongest match for labs — your number 2 priority.");
+  });
+
+  it("omits the priority clause when only one style is selected", () => {
+    const target = professor({ traits: ["labs"] });
+    const reason = buildRecommendationReason(target, preferences({ learningStyles: ["labs"] }));
+
+    expect(reason).toBe("Strongest match for labs.");
   });
 
   it("says so when the top result matched nothing the student selected", () => {
@@ -100,5 +114,52 @@ describe("buildRecommendationReason", () => {
     const reason = buildRecommendationReason(target, preferences({ learningStyles: ["labs"] }));
 
     expect(reason).toContain("no selected learning style matched");
+  });
+});
+
+describe("preference importance ranking", () => {
+  it("weights the top-ranked style above the bottom-ranked one", () => {
+    const topOnly = professor({ traits: ["project-heavy"] });
+    const bottomOnly = professor({ traits: ["labs"] });
+    const ranked = preferences({ learningStyles: ["project-heavy", "structured", "labs"] });
+
+    expect(matchProfessor(topOnly, ranked).matchPercent).toBeGreaterThan(
+      matchProfessor(bottomOnly, ranked).matchPercent!,
+    );
+  });
+
+  it("reorders the winner when the student reprioritizes", () => {
+    const projects = professor({ id: "projects", traits: ["project-heavy"] });
+    const labs = professor({ id: "labs", traits: ["labs"] });
+
+    const projectsFirst = preferences({ learningStyles: ["project-heavy", "labs"] });
+    const labsFirst = preferences({ learningStyles: ["labs", "project-heavy"] });
+
+    expect(rankProfessors([projects, labs], projectsFirst)[0].id).toBe("projects");
+    expect(rankProfessors([projects, labs], labsFirst)[0].id).toBe("labs");
+  });
+
+  it("treats a single selected style as the whole weight", () => {
+    const target = professor({ traits: ["labs"] });
+    const one = matchProfessor(target, preferences({ learningStyles: ["labs"] }));
+    const full = matchProfessor(professor({ traits: ["labs", "project-heavy"] }), preferences({ learningStyles: ["labs", "project-heavy"] }));
+
+    expect(one.matchPercent).toBe(full.matchPercent);
+  });
+
+  it("still reaches the same ceiling when every ranked style matches", () => {
+    const target = professor({ traits: ["project-heavy", "structured", "labs"] });
+    const match = matchProfessor(target, preferences({ learningStyles: ["project-heavy", "structured", "labs"] }));
+    const single = matchProfessor(professor({ traits: ["labs"] }), preferences({ learningStyles: ["labs"] }));
+
+    expect(match.matchPercent).toBe(single.matchPercent);
+  });
+
+  it("tells the student when nobody matched their top priority", () => {
+    const target = professor({ traits: ["labs"] });
+    const summary = buildClassSummary([target], preferences({ learningStyles: ["project-heavy", "labs"] }));
+
+    expect(summary).toContain("top priority");
+    expect(summary).toContain("project-heavy");
   });
 });

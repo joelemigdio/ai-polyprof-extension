@@ -545,6 +545,43 @@ button.entity-card:hover { border-color: var(--border-strong); box-shadow: 0 2px
 }
 .empty-block { display: grid; justify-items: center; }
 
+/* Preference priority */
+.prefs-hint { color: var(--muted); font-size: 0.82rem; line-height: 1.4; margin: 0 0 9px; }
+.rank-list { display: grid; gap: 7px; list-style: none; margin: 0; padding: 0; }
+.rank-item {
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  display: flex;
+  gap: 9px;
+  padding: 8px 10px;
+}
+.rank-number {
+  background: var(--green-900);
+  border-radius: var(--pill);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 7px;
+}
+.rank-label { flex: 1; font-size: 0.9rem; font-weight: 600; min-width: 0; }
+.rank-weight { color: var(--muted); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.rank-controls { display: flex; gap: 4px; }
+.rank-button {
+  background: var(--green-100);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  color: var(--green-900);
+  font-size: 0.86rem;
+  height: 26px;
+  line-height: 1;
+  width: 26px;
+}
+.rank-button:hover:not(:disabled) { background: var(--green-900); color: #fff; }
+.rank-button:disabled { color: var(--muted); cursor: default; opacity: 0.4; }
+
 .error-state {
   background: #fdf3ee;
   border: 1px solid #e8c4b0;

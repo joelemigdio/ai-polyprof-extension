@@ -5,6 +5,7 @@ import {
   quickPreferenceKeys,
   traitDefinitions,
   traitLabel,
+  traitWeights,
   type ClassTime,
   type DepartmentCode,
   type StudentPreferences,
@@ -26,6 +27,17 @@ export function PreferencesScreen({ preferences, onChange }: PreferencesScreenPr
   function update(partial: Partial<StudentPreferences>) {
     onChange({ ...preferences, ...partial });
     setStatus(null);
+  }
+
+  const weights = traitWeights(preferences.learningStyles);
+
+  /** Swaps with the neighbour; React keys the rows by trait so focus follows the button. */
+  function moveStyle(index: number, delta: number) {
+    const next = [...preferences.learningStyles];
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    update({ learningStyles: next });
   }
 
   function toggleQuickPreference(key: TraitKey) {
@@ -89,6 +101,44 @@ export function PreferencesScreen({ preferences, onChange }: PreferencesScreenPr
           selected={preferences.learningStyles}
           onChange={(learningStyles) => update({ learningStyles })}
         />
+
+        {preferences.learningStyles.length > 1 ? (
+          <div className="field">
+            <p className="section-label" id="priority-label">Preference priority</p>
+            <p className="prefs-hint">
+              Ranked most important first. Your top preference counts most when professors are ranked.
+            </p>
+            <ol className="rank-list" aria-labelledby="priority-label">
+              {preferences.learningStyles.map((key, index) => (
+                <li className="rank-item" key={key}>
+                  <span className="rank-number" aria-hidden="true">{index + 1}</span>
+                  <span className="rank-label">{traitLabel(key)}</span>
+                  <span className="rank-weight">{Math.round(100 * (weights.get(key) ?? 0))}%</span>
+                  <span className="rank-controls">
+                    <button
+                      className="rank-button"
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => moveStyle(index, -1)}
+                      aria-label={`Move ${traitLabel(key)} up to priority ${index}`}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="rank-button"
+                      type="button"
+                      disabled={index === preferences.learningStyles.length - 1}
+                      onClick={() => moveStyle(index, 1)}
+                      aria-label={`Move ${traitLabel(key)} down to priority ${index + 2}`}
+                    >
+                      ↓
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
 
         <div className="field">
           <p className="section-label">Quick preferences</p>
