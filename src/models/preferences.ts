@@ -2,6 +2,22 @@ export type DepartmentCode = "CSC" | "CPE" | "EE" | "STAT" | "MATH";
 export type ClassTime = "morning" | "afternoon" | "evening";
 
 /**
+ * PolyRatings' own `gradeLevel` vocabulary, used verbatim so reviews can be
+ * bucketed by a string compare with no mapping layer to drift.
+ */
+export type ClassStanding = "Freshman" | "Sophomore" | "Junior" | "Senior" | "5th/6th Year" | "Grad Student";
+
+/** Ordered youngest to oldest; adjacency in the cohort fallback is a step here. */
+export const classStandingOptions: ReadonlyArray<ClassStanding> = [
+  "Freshman",
+  "Sophomore",
+  "Junior",
+  "Senior",
+  "5th/6th Year",
+  "Grad Student",
+];
+
+/**
  * Teaching characteristics. Professors are tagged with the same keys so the
  * matcher can intersect a student's selections with a professor's traits.
  */
@@ -56,15 +72,44 @@ export const quickPreferenceKeys: ReadonlyArray<TraitKey> = [
 export interface StudentPreferences {
   version: 2;
   departments: DepartmentCode[];
+  /**
+   * Null until the student opts in. The spec asks for academic year only when
+   * peer-based recommendations are wanted, so this stays unset by default and
+   * recommendations fall back to the whole review corpus without it.
+   */
+  classStanding: ClassStanding | null;
+  /** Stored for future schedule filtering; not yet used in matching. */
   classTimes: ClassTime[];
+  /**
+   * Ordered most important first. The position is the student's ranking, so
+   * reordering this array is what changes how much each style counts.
+   */
   learningStyles: TraitKey[];
 }
 
+/**
+ * Converts the student's ranking into weights that sum to 1, decaying linearly
+ * so the top choice outweighs the last. With three styles the split is
+ * 50/33/17, which is enough for a reorder to visibly change the ranking.
+ */
+export function traitWeights(styles: TraitKey[]): Map<TraitKey, number> {
+  const total = (styles.length * (styles.length + 1)) / 2;
+  if (total === 0) return new Map();
+  return new Map(styles.map((key, index) => [key, (styles.length - index) / total]));
+}
+
+/**
+ * The defaults are the three traits that PolyRatings tags can actually
+ * substantiate. The previous defaults (project-heavy, code-evaluation, labs)
+ * have no equivalent in real data, so a fresh install matched nothing and
+ * reported that every professor failed every preference.
+ */
 export const defaultStudentPreferences: StudentPreferences = {
   version: 2,
   departments: ["CSC", "CPE"],
+  classStanding: null,
   classTimes: ["morning", "afternoon"],
-  learningStyles: ["project-heavy", "code-evaluation", "labs"],
+  learningStyles: ["visual-slides", "responsive", "structured"],
 };
 
 export function createDefaultPreferences(): StudentPreferences {

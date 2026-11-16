@@ -1,16 +1,20 @@
 import { useRef, useState } from "react";
 import {
+  classStandingOptions,
   classTimeOptions,
   departmentOptions,
   quickPreferenceKeys,
   traitDefinitions,
   traitLabel,
+  traitWeights,
+  type ClassStanding,
   type ClassTime,
   type DepartmentCode,
   type StudentPreferences,
   type TraitKey,
 } from "../models/preferences";
-import { savePreferences } from "../services/preference-storage";
+import { resetPreferences, savePreferences } from "../services/preference-storage";
+import { clearFavorites } from "../services/favorites-storage";
 import { MatchingBanner } from "./MatchingBanner";
 import { MultiSelect } from "./MultiSelect";
 
@@ -28,6 +32,17 @@ export function PreferencesScreen({ preferences, onChange }: PreferencesScreenPr
     setStatus(null);
   }
 
+  const weights = traitWeights(preferences.learningStyles);
+
+  /** Swaps with the neighbour; React keys the rows by trait so focus follows the button. */
+  function moveStyle(index: number, delta: number) {
+    const next = [...preferences.learningStyles];
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    update({ learningStyles: next });
+  }
+
   function toggleQuickPreference(key: TraitKey) {
     update({
       learningStyles: preferences.learningStyles.includes(key)
@@ -42,6 +57,16 @@ export function PreferencesScreen({ preferences, onChange }: PreferencesScreenPr
       setStatus("Preferences saved on this browser.");
     } catch {
       setStatus("Preferences could not be saved. Please try again.");
+    }
+  }
+
+  async function handleClear() {
+    try {
+      const [defaults] = await Promise.all([resetPreferences(), clearFavorites()]);
+      onChange(defaults);
+      setStatus("Saved preferences and favorited classes were cleared.");
+    } catch {
+      setStatus("Your data could not be cleared. Please try again.");
     }
   }
 
@@ -73,6 +98,27 @@ export function PreferencesScreen({ preferences, onChange }: PreferencesScreenPr
           onChange={(departments) => update({ departments })}
         />
 
+        <div className="field">
+          <label className="section-label" htmlFor="class-standing">Class standing</label>
+          <p className="prefs-hint">
+            Optional. Used only to compare you against reviewers in your year. Leave it unset and
+            recommendations use every reviewer instead.
+          </p>
+          <select
+            className="standing-select"
+            id="class-standing"
+            value={preferences.classStanding ?? ""}
+            onChange={(event) =>
+              update({ classStanding: event.target.value === "" ? null : (event.target.value as ClassStanding) })
+            }
+          >
+            <option value="">Prefer not to say</option>
+            {classStandingOptions.map((standing) => (
+              <option key={standing} value={standing}>{standing}</option>
+            ))}
+          </select>
+        </div>
+
         <MultiSelect<ClassTime>
           label="Class time"
           placeholder="Any time"
@@ -89,6 +135,44 @@ export function PreferencesScreen({ preferences, onChange }: PreferencesScreenPr
           selected={preferences.learningStyles}
           onChange={(learningStyles) => update({ learningStyles })}
         />
+
+        {preferences.learningStyles.length > 1 ? (
+          <div className="field">
+            <p className="section-label" id="priority-label">Preference priority</p>
+            <p className="prefs-hint">
+              Ranked most important first. Your top preference counts most when professors are ranked.
+            </p>
+            <ol className="rank-list" aria-labelledby="priority-label">
+              {preferences.learningStyles.map((key, index) => (
+                <li className="rank-item" key={key}>
+                  <span className="rank-number" aria-hidden="true">{index + 1}</span>
+                  <span className="rank-label">{traitLabel(key)}</span>
+                  <span className="rank-weight">{Math.round(100 * (weights.get(key) ?? 0))}%</span>
+                  <span className="rank-controls">
+                    <button
+                      className="rank-button"
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => moveStyle(index, -1)}
+                      aria-label={`Move ${traitLabel(key)} up to priority ${index}`}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="rank-button"
+                      type="button"
+                      disabled={index === preferences.learningStyles.length - 1}
+                      onClick={() => moveStyle(index, 1)}
+                      aria-label={`Move ${traitLabel(key)} down to priority ${index + 2}`}
+                    >
+                      ↓
+                    </button>
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : null}
 
         <div className="field">
           <p className="section-label">Quick preferences</p>
@@ -112,6 +196,17 @@ export function PreferencesScreen({ preferences, onChange }: PreferencesScreenPr
         </button>
         {status ? <p className="save-status" aria-live="polite">{status}</p> : null}
         <p className="prefs-footnote">You can update these anytime from Settings.</p>
+
+        <div className="field danger-zone">
+          <p className="section-label">Your data</p>
+          <p className="prefs-hint">
+            Everything PolyProf stores — your preferences, class standing, and saved classes — lives on this
+            browser only. Nothing is sent anywhere.
+          </p>
+          <button className="button-danger" type="button" onClick={() => void handleClear()}>
+            Clear all my data
+          </button>
+        </div>
       </div>
     </div>
   );

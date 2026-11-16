@@ -12,6 +12,7 @@ The hover card reads **real PolyRatings data** from the public read-only API at 
 - A **personalized summary** beneath the professor list compares them and explains the best fit.
 - Clicking a professor opens a **review summary** — recurring themes, strengths, and concerns counted from their own reviews — alongside their tags and top reviews, with a back action.
 - **Save this class** keeps a class on your favorites list, tagged with whichever professor currently ranks first.
+- The course card names a **recommended professor** with the cohort and sample size behind the number, and **Compare Professors** shows every visible instructor's real PolyRatings scores side by side.
 - Changing a preference in the popup re-renders any open card immediately, with no page reload.
 - Instructors with no rating match are listed as "no ratings available yet" rather than hidden.
 - If PolyRatings is unreachable, a dismissible notice says so instead of the page looking as though the extension never ran.
@@ -19,16 +20,19 @@ The hover card reads **real PolyRatings data** from the public read-only API at 
 ### In the popup
 
 - **Search** — class search filtered by your saved departments, with recent searches and suggested-class cards showing a preference-driven match percentage. Each card has a star to save the class.
-- **Professor results** — every professor teaching the selected class, ranked, with a pinned AI Recommendation panel explaining the top pick.
+- **Professor results** — every professor teaching the selected class, ranked, with a pinned recommendation panel naming the cohort, its rating, the sample size, a confidence badge, and the preferences applied.
+- **Compare** — side-by-side bars for overall, presents clearly, and recognizes struggles, with the leader marked per metric.
 - **Professor detail** — a review summary (themes, strengths, concerns) above the top reviews, tagged by the reviewer's class year.
 - **Favorites** — every saved class in one list with its captured ratings and a one-tap remove, reachable from the star in the header.
-- **Preferences** — department, class time, and learning-style multi-selects plus one-tap quick-preference chips, persisted to `chrome.storage.local`.
+- **Preferences** — department, optional class standing, class time, and learning-style multi-selects, a **priority ranking** for the selected styles, one-tap quick-preference chips, and a **Clear all my data** control. Persisted to `chrome.storage.local`.
 
 ### Throughout
 
 - Dual ratings per professor, both on PolyRatings' native **0-4 scale**: overall rating and "presents material clearly".
-- A deterministic matching service (`src/services/preference-matching.ts`) converts saved preferences into match percentages, fit lines, ranking, class summaries, and recommendation copy. Changing a preference visibly changes all of them.
+- A deterministic matching service (`src/services/preference-matching.ts`) converts saved preferences into match percentages, fit lines, ranking, class summaries, and recommendation copy. Changing *or reordering* a preference visibly changes all of them.
+- Learning styles are **ranked, not just selected**. Their order is the student's priority, and `traitWeights` decays linearly across it — three styles split 50/33/17 — so the top choice outweighs the last.
 - A deterministic review synthesizer (`src/services/review-synthesis.ts`) counts valenced phrases in review text to produce themes, strengths, and concerns. See [How the review summary works](#how-the-review-summary-works).
+- Every recommendation discloses its cohort, that cohort's rating, the sample size, and the preferences applied. See [How recommendations are explained](#how-recommendations-are-explained).
 
 ## How the review summary works
 
@@ -42,14 +46,25 @@ Consequences worth knowing:
 - Matching is literal. "Grading criteria are *unusually* clear" does not match the cue `grading criteria are clear`, so real coverage is a floor, not a ceiling.
 - Measured against live PolyRatings data for twelve CSC professors with 20+ reviews each: **12/12 produced themes, 10/12 strengths, 8/12 concerns.**
 
+## How recommendations are explained
+
+`buildPeerAggregate` groups a professor's reviews by the reviewer's academic year and walks a fallback ladder: the student's own year, then the years either side, then every reviewer. A tier is only used once it reaches `minimumCohortSize` (3) — below that a mean describes one identifiable student rather than the professor, so the group is widened instead. The tier that produced the number is always reported, so the UI names the group rather than implying a peer match that was not available.
+
+Sample size drives a confidence band (10+ high, 5+ moderate, below that low), and anything short of a well-populated same-year cohort carries a caveat explaining exactly why.
+
+Class standing is **optional and unset by default**. Without it, recommendations use the whole review corpus and say so.
+
+Two honest limits:
+
+- **Same-year only.** PolyRatings stores `gradeLevel` per review but never the reviewer's major, so a same-major cohort cannot be built from this data at all.
+- **A professor loaded from the index alone has no review text**, so its overall rating over `numEvals` is reported as the all-reviewers aggregate rather than being mistaken for an unrated professor.
+
 ## Not yet implemented
 
 - **No AI model is called.** The `AiSummaryService` interface in `src/services/ai-summary-service.ts` has no implementation. The review summary is phrase counting and the fit lines come from a trait vocabulary; the UI says so on both surfaces. A real LLM summary needs a server-side endpoint, since a browser extension must never carry a provider key.
 - **The popup still shows demo data.** Only the in-page hover card reads PolyRatings. Migrating the popup needs a UX decision: its search screen browses courses, and real data has ~3,600 of them rather than four.
-- **Similar-student ratings do not exist.** The second pill shows PolyRatings' "presents material clearly" score. A genuine peer rating would need the student's class standing added to preferences so reviews could be filtered by `gradeLevel`; reviewer *major* is not in PolyRatings data at all, so same-year is the realistic ceiling.
-- **Preferences cannot be ranked by importance.** Every selected learning style is weighted equally.
+- **Peer cohorts are same-year only.** PolyRatings records each reviewer's `gradeLevel` but never their major, so the spec's same-*major* cohort is not buildable from this source. Recommendations say which group they used rather than implying a major match.
 - **Five of eight learning-style traits cannot match real data.** PolyRatings tags are logistics ("Uploads Slides", "Recorded Lectures"), not pedagogy. `project-heavy`, `code-evaluation`, `labs`, `clear-grading`, and `light-midterms` have no equivalent, so preference matching fires on only three traits until the vocabulary is migrated.
-- **Compare** is rendered per the design but disabled in the popup; the in-page course card has a comparison view, but it can only substantiate its columns against fixture data.
 - **Class time preferences** are stored but unused in matching.
 - **Favorites are local only.** They live in `chrome.storage.local`, are not synced, and are keyed by course plus professor.
 - **Live portal compatibility is unverified** — the adapter is built against documented PeopleSoft structures and a local fixture. See [Student Center adapter assumptions](docs/STUDENT_CENTER_ADAPTER_ASSUMPTIONS.md).

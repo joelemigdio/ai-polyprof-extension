@@ -74,11 +74,23 @@ export interface CourseOffering {
   professorIds: string[];
 }
 
-/** Data that the current provider can substantiate for one visible instructor. */
+/**
+ * Data that the current provider can substantiate for one visible instructor.
+ *
+ * The fields mirror what PolyRatings actually measures. An earlier shape had
+ * workload/difficulty/flexibility columns that no real field backs; in
+ * particular `studentDifficulties` means "recognizes student difficulties"
+ * (higher is better), so surfacing it as "difficulty" would invert its meaning.
+ */
 export interface CourseProfessorComparison {
   instructor: CourseInstructor;
   professorId: string | null;
+  professorName: string | null;
   overallRating: number | null;
+  /** PolyRatings "presents material clearly". */
+  clarityRating: number | null;
+  /** PolyRatings "recognizes student difficulties". */
+  supportRating: number | null;
   reviewCount: number | null;
   /** Deterministic score from saved learning-style preferences and ratings. */
   preferenceFit: number | null;
@@ -91,6 +103,8 @@ export interface CourseProfessorComparison {
   clarity: string | null;
   flexibility: string | null;
   reviewThemes: string[];
+  /** Most-cited PolyRatings tags, verbatim. */
+  tags: string[];
 }
 
 /** Result contract for provider-backed professor recommendations. */

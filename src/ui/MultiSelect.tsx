@@ -22,8 +22,10 @@ function MultiSelectInner<T extends string>(
   { label, options, selected, placeholder, onChange }: MultiSelectProps<T>,
   ref: React.ForwardedRef<HTMLDetailsElement>,
 ) {
+  // Follows selection order rather than option order, because for learning
+  // styles that order is the student's ranking.
   const summaryText = selected.length > 0
-    ? options.filter((option) => selected.includes(option.value)).map((option) => option.label).join(", ")
+    ? selected.map((value) => options.find((option) => option.value === value)?.label ?? value).join(", ")
     : placeholder;
 
   function toggle(value: T) {

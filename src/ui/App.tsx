@@ -6,6 +6,7 @@ import { mockProfessorDataService } from "../services/mock-professor-data-servic
 import { addFavorite, loadFavorites, removeFavorite } from "../services/favorites-storage";
 import { loadPreferences } from "../services/preference-storage";
 import { AppHeader } from "./AppHeader";
+import { ComparisonScreen } from "./ComparisonScreen";
 import { DetailScreen } from "./DetailScreen";
 import { FavoritesScreen } from "./FavoritesScreen";
 import { MatchingBanner } from "./MatchingBanner";
@@ -13,7 +14,7 @@ import { PreferencesScreen } from "./PreferencesScreen";
 import { ResultsScreen } from "./ResultsScreen";
 import { SearchScreen } from "./SearchScreen";
 
-type View = "search" | "results" | "detail" | "preferences" | "favorites";
+type View = "search" | "results" | "detail" | "preferences" | "favorites" | "compare";
 
 export function App() {
   const [professors, setProfessors] = useState<Professor[]>([]);
@@ -134,6 +135,7 @@ export function App() {
             setSelectedProfessor(professor);
             setView("detail");
           }}
+          onCompare={() => setView("compare")}
           onBack={() => setView("search")}
         />
       ) : null}
@@ -143,6 +145,14 @@ export function App() {
           professor={selectedProfessor}
           preferences={preferences}
           onBack={() => setView(selectedCourse ? "results" : "search")}
+        />
+      ) : null}
+
+      {!isLoading && !loadError && view === "compare" && selectedCourse ? (
+        <ComparisonScreen
+          course={selectedCourse}
+          professors={courseProfessors}
+          onBack={() => setView("results")}
         />
       ) : null}
 

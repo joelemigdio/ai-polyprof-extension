@@ -12,8 +12,9 @@ import { favoriteId, type FavoriteClass } from "../models/favorites";
 import { courseAliases, courseTitle } from "../data/course-crosswalk";
 import { buildClassSummary, matchProfessor, rankProfessors } from "../services/preference-matching";
 import { synthesizeReviews, type ReviewSynthesis } from "../services/review-synthesis";
-import { buildCourseProfessorComparisons, recommendCourseProfessor } from "../services/course-professor-comparison";
-import { CourseHoverCard, CourseProfessorComparisonView } from "./course-hover-card";
+import { buildRecommendationExplanation, describePreferenceFactors } from "../services/recommendation-explanation";
+import { buildCourseProfessorComparisons, rankComparisons } from "../services/course-professor-comparison";
+import { CourseHoverCard, CourseProfessorComparisonView, type CourseHoverCardProps } from "./course-hover-card";
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
 import {
   findClassRows,
@@ -42,8 +43,6 @@ export interface ProfessorDetailSource {
 export interface StudentCenterIntegrationOptions {
   document: Document;
   professors: Professor[];
-  /** Only local fixtures may surface the bundled demonstration dataset. */
-  useMockData?: boolean;
   details?: ProfessorDetailSource;
   preferences?: StudentPreferences;
   favorites?: FavoriteClass[];
@@ -63,7 +62,6 @@ interface ResolvedRow {
 interface ResolvedCourseRow {
   row: CourseHoverRow;
   comparisons: CourseProfessorComparison[];
-  recommendation: CourseProfessorComparison | null;
 }
 
 type HoverRow = ClassRow | CourseHoverRow;
@@ -101,12 +99,10 @@ export class StudentCenterIntegration {
   private suppressFocusHide = 0;
   private preferences: StudentPreferences;
   private favoriteIds: Set<string>;
-  private readonly useMockData: boolean;
 
   constructor(private readonly options: StudentCenterIntegrationOptions) {
     this.preferences = options.preferences ?? createDefaultPreferences();
     this.favoriteIds = new Set((options.favorites ?? []).map((favorite) => favorite.id));
-    this.useMockData = options.useMockData ?? isFixtureDocument(options.document);
   }
 
   start(): void {
@@ -311,11 +307,11 @@ export class StudentCenterIntegration {
   }
 
   private resolveCourseRow(row: CourseHoverRow): ResolvedCourseRow {
-    const comparisons = buildCourseProfessorComparisons(row.instructors, this.options.professors, this.preferences);
     return {
       row,
-      comparisons,
-      recommendation: recommendCourseProfessor(comparisons),
+      comparisons: rankComparisons(
+        buildCourseProfessorComparisons(row.instructors, this.options.professors, this.preferences),
+      ),
     };
   }
 
@@ -697,7 +693,7 @@ export class StudentCenterIntegration {
     const favoriteToggle = this.renderFavoriteToggle(resolved, card, showClose);
     if (favoriteToggle) body.append(favoriteToggle);
 
-    body.append(this.renderSummary(resolved.rated));
+    body.append(this.renderSummary(resolved.rated, resolved.aliases));
     card.append(body);
   }
 
@@ -759,8 +755,7 @@ export class StudentCenterIntegration {
       document: this.options.document,
       course: resolved.row.course,
       comparisons: resolved.comparisons,
-      recommendation: resolved.recommendation,
-      usesMockData: this.useMockData,
+      recommendation: this.buildCourseRecommendation(resolved),
       onCompare: (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -776,7 +771,6 @@ export class StudentCenterIntegration {
     card.append(CourseProfessorComparisonView({
       document: this.options.document,
       comparisons: resolved.comparisons,
-      usesMockData: this.useMockData,
       onBack: (event) => {
         event.preventDefault();
         event.stopPropagation();
@@ -786,11 +780,46 @@ export class StudentCenterIntegration {
     }));
   }
 
-  private renderSummary(professors: Professor[]): HTMLElement {
+  /** Best-ranked resolvable professor for a course card, with its explanation. */
+  private buildCourseRecommendation(resolved: ResolvedCourseRow): CourseHoverCardProps["recommendation"] {
+    const matched = resolved.comparisons
+      .map((comparison) => this.professorById(comparison.professorId))
+      .filter((professor): professor is Professor => professor !== null);
+    if (matched.length === 0) return null;
+
+    const best = rankProfessors(matched, this.preferences)[0];
+    const explanation = buildRecommendationExplanation(best, this.preferences);
+    return {
+      name: best.name,
+      headline: explanation.headline,
+      factors: describePreferenceFactors(best, this.preferences),
+      caveat: explanation.caveat,
+    };
+  }
+
+  private professorById(id: string | null): Professor | null {
+    if (!id) return null;
+    return this.details.get(id) ?? this.options.professors.find((professor) => professor.id === id) ?? null;
+  }
+
+  private renderSummary(professors: Professor[], aliases: string[]): HTMLElement {
     const summary = this.element("section", "summary");
     summary.append(
       this.element("h3", undefined, "Personalized summary"),
       this.element("p", undefined, buildClassSummary(professors, this.preferences)),
+    );
+
+    const best = rankProfessors(professors, this.preferences)[0];
+    if (best) {
+      const explanation = buildRecommendationExplanation(best, this.preferences, aliases);
+      summary.append(
+        this.element("p", "rec-basis", explanation.headline),
+        this.element("p", "rec-factors", describePreferenceFactors(best, this.preferences)),
+      );
+      if (explanation.caveat) summary.append(this.element("p", "note caveat", explanation.caveat));
+    }
+
+    summary.append(
       this.element(
         "p",
         "note",
@@ -913,8 +942,5 @@ export class StudentCenterIntegration {
   }
 }
 
-export function isFixtureDocument(document: Document): boolean {
-  return document.documentElement.hasAttribute("data-polyratings-fixture");
-}
 
 export { normalizeInstructorName };

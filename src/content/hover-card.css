@@ -154,12 +154,23 @@
 }
 .course-professor .prof-meta,
 .comparison .prof-meta { margin-bottom: 0; }
-.course-themes,
-.comparison-traits {
+.course-themes {
   color: var(--muted);
   font-size: 11px;
   margin: 6px 0 0;
 }
+.comparison-head { align-items: baseline; display: flex; gap: 8px; justify-content: space-between; }
+.comparison-count { color: var(--muted); font-size: 11px; }
+.metrics { margin-top: 7px; }
+.metric { align-items: center; display: flex; gap: 8px; justify-content: space-between; padding: 3px 0; }
+.metric-label { color: var(--muted); font-size: 11.5px; }
+.metric-value { font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 700; }
+.metric-value.is-leader { color: #1b6b43; }
+.metric-value.is-leader::after { content: " ▲"; font-size: 8px; }
+.rec-name { font-weight: 700; margin: 0 0 3px !important; }
+.rec-factors { font-size: 12px; margin-top: 5px !important; opacity: 0.9; }
+.summary .caveat { opacity: 0.85; }
+.rec-basis { margin-top: 7px !important; }
 .course-recommendation { margin: 0; }
 .compare {
   background: #fff;
