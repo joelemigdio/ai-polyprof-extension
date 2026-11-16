@@ -170,6 +170,12 @@
   padding: 8px 10px;
 }
 .compare:hover { background: #e9f0eb; }
+.compare:disabled {
+  border-color: #b9c5bc;
+  color: #77897d;
+  cursor: not-allowed;
+}
+.compare:disabled:hover { background: #fff; }
 
 .back {
   background: none;

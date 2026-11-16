@@ -190,6 +190,49 @@ describe("Student Center integration fixture", () => {
     expect(detection.candidates.every((candidate) => candidate.element.getAttribute("aria-hidden") === "false")).toBe(true);
   });
 
+  it("detects View Wait List's differently nested native rows by their Instructor column position", () => {
+    document.body.innerHTML = `<main><h1>View Wait List</h1><div aria-label="Sections" role="table"><div role="row"><div role="columnheader">Section</div><div role="columnheader"><p>Instructor</p></div><div role="columnheader">List Position</div></div><div role="row"><div role="cell">DATA 4610 S03-LEC (2881)</div><div role="cell"><div><p data-wait-list-instructor>Austin Wright</p></div></div><div role="cell">4</div></div><div role="row"><div role="cell">DATA 4610 S04-LAB (2882)</div><div role="cell"><div><p data-wait-list-instructor>Austin Wright</p></div></div><div role="cell">4</div></div></div></main>`;
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    const rectForWaitList = function(this: HTMLElement): DOMRect {
+      if (this.matches("[role='columnheader']") && this.textContent?.includes("Instructor")) return rect(600, 0, 160, 30);
+      if (this.hasAttribute("data-wait-list-instructor")) return rect(620, 80, 100, 20);
+      return rect(0, 0, 0, 0);
+    };
+    HTMLElement.prototype.getBoundingClientRect = rectForWaitList;
+
+    try {
+      const detection = findInstructorDetection(document);
+      expect(detection.candidates.map((candidate) => candidate.instructorName)).toEqual(["Austin Wright", "Austin Wright"]);
+      expect(detection.candidates.every((candidate) => candidate.source === "view-wait-list")).toBe(true);
+      expect(detection.candidates.every((candidate) => candidate.element.tagName === "P")).toBe(true);
+      expect(detection.candidates.every((candidate) => candidate.sectionElement?.getAttribute("role") === "row")).toBe(true);
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalRect;
+    }
+  });
+
+  it("detects the native Drop Classes Instructor column without binding its selection checkbox", () => {
+    document.body.innerHTML = `<main><h1>Drop Classes</h1><h2>Select classes to drop and then select Drop</h2><button id="drop" type="button">Drop</button><div aria-label="Classes" role="table"><div role="row"><div role="columnheader">Class</div><div role="columnheader"><p>Instructor</p></div><div role="columnheader">Status</div></div><div role="row"><div role="cell"><p>CSC 3780 S01-LEC (6155)</p></div><div role="cell"><div><p data-drop-classes-instructor>April Grow</p></div></div><div role="cell">Open</div><input id="drop-checkbox" type="checkbox" aria-label="CSC 3780" /></div><div role="row"><div role="cell"><p>DATA 4610 S03-LEC (2881)</p></div><div role="cell"><div><p data-drop-classes-instructor>Austin Wright</p></div></div><div role="cell">Waitlisted</div></div></div></main>`;
+    const originalRect = HTMLElement.prototype.getBoundingClientRect;
+    const rectForDropClasses = function(this: HTMLElement): DOMRect {
+      if (this.matches("[role='columnheader']") && this.textContent?.includes("Instructor")) return rect(600, 0, 160, 30);
+      if (this.hasAttribute("data-drop-classes-instructor")) return rect(620, 80, 100, 20);
+      return rect(0, 0, 0, 0);
+    };
+    HTMLElement.prototype.getBoundingClientRect = rectForDropClasses;
+
+    try {
+      const detection = findInstructorDetection(document);
+      expect(detection.candidates.map((candidate) => candidate.instructorName)).toEqual(["April Grow", "Austin Wright"]);
+      expect(detection.candidates.every((candidate) => candidate.source === "drop-classes")).toBe(true);
+      expect(detection.candidates.every((candidate) => candidate.element.tagName === "P")).toBe(true);
+      expect(document.querySelector("#drop-checkbox")?.hasAttribute("data-polyratings-hover-target")).toBe(false);
+      expect(document.querySelector("#drop")?.hasAttribute("data-polyratings-hover-target")).toBe(false);
+    } finally {
+      HTMLElement.prototype.getBoundingClientRect = originalRect;
+    }
+  });
+
   it("detects Shopping Cart Instructor gridcells only inside the verified cart treegrid", () => {
     document.documentElement.id = "hcx-shopping-cart";
     document.body.innerHTML = `<main><div aria-label="Classes" role="table"><div aria-label="Enrollment_Classes" role="treegrid"><div role="row"><div role="columnheader" header="Class">Class</div><div role="columnheader" header="Instructor">Instructor</div></div><div role="row" data-row-id="cart-1"><div role="gridcell" header="Class">CSC 430</div><div role="gridcell" header="Instructor" index="5"><div title="Michael Haungs"><span aria-hidden="false">Michael Haungs</span></div></div></div><div role="row" data-row-id="cart-2"><div role="gridcell" header="Class">CSC 431</div><div role="gridcell" header="Instructor" index="5"><div title="Michael Haungs"><span aria-hidden="false">Michael Haungs</span></div></div></div><div role="row" data-row-id="cart-3"><div role="gridcell" header="Class">CSC 480</div><div role="gridcell" header="Instructor" index="5"><div title="Ada Lovelace"><span aria-hidden="false">Ada Lovelace</span></div><div title="Grace Hopper"><span aria-hidden="false">Grace Hopper</span></div></div></div></div></div><div role="gridcell" header="Instructor">Unrelated instructor</div></main>`;
@@ -336,6 +379,41 @@ describe("Student Center integration fixture", () => {
     integration.stop();
   });
 
+  it("compares every visible instructor from the Schedule Builder Select Sections destination", () => {
+    const secondProfessor: Professor = {
+      ...professor,
+      id: "fixture-grace",
+      name: "Grace Hopper",
+      firstName: "Grace",
+      lastName: "Hopper",
+      starRating: 4,
+      clarityRating: 4,
+      reviewCount: 8,
+      traits: ["labs"],
+    };
+    document.body.innerHTML = `<form><div><h2 id="section-course-heading">CSC 4880 - Artificial Intelligence</h2></div><div aria-label="Sections List" role="table"><div role="row"><div><div role="columnheader">Section</div></div><div><div role="columnheader"><button type="button"><p>Instructor</p></button></div></div></div><div role="row"><div><div role="cell">S01-LEC</div></div><div><div role="cell">Dr. Ada Lovelace</div></div></div><div role="row"><div><div role="cell">S02-LAB</div></div><div><div role="cell">Dr. Grace Hopper</div></div></div></div></form>`;
+    const rows = findCourseRows(document);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].course).toEqual({ code: "CSC 4880", title: "Artificial Intelligence" });
+    expect(rows[0].instructors.map((instructor) => instructor.displayName)).toEqual(["Dr. Ada Lovelace", "Dr. Grace Hopper"]);
+
+    const integration = new StudentCenterIntegration({
+      document,
+      professors: [professor, secondProfessor],
+      preferences: { ...createDefaultPreferences(), learningStyles: ["labs"] },
+      useMockData: false,
+    });
+    integration.start();
+    const heading = document.querySelector<HTMLElement>("#section-course-heading")!;
+    expect(heading.getAttribute("data-polyratings-course-hover-target")).toBe("true");
+    heading.click();
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    expect(host.shadowRoot?.textContent).toContain("Dr. Ada Lovelace");
+    expect(host.shadowRoot?.textContent).toContain("Dr. Grace Hopper");
+    expect(host.shadowRoot?.textContent).toContain("Grace Hopper is recommended");
+    integration.stop();
+  });
+
   it("binds each explicitly separated instructor in one dd value without adding page buttons", () => {
     const integration = setFixture(`<div aria-label="Section List" role="group"><ul><li><dl><dt>Instructor</dt><dd>Dr. Ada Lovelace; Dr. Grace Hopper</dd></dl></li></ul></div>`);
     expect(document.querySelectorAll(".polyratings-view-button")).toHaveLength(0);
@@ -413,6 +491,95 @@ describe("Student Center integration fixture", () => {
     expect(host.hidden).toBe(false);
     expect(host.shadowRoot?.textContent).toContain("CSC 3001");
     expect(host.shadowRoot?.textContent).toContain("Modern Application Development");
+    expect(host.shadowRoot?.textContent).toContain("Select Sections for this course");
+    expect(host.shadowRoot?.querySelector<HTMLButtonElement>(".compare")?.disabled).toBe(true);
+    integration.stop();
+  });
+
+  it("compares the instructors in an open Schedule Builder section list using saved preferences", () => {
+    const secondProfessor: Professor = {
+      ...professor,
+      id: "fixture-grace",
+      name: "Grace Hopper",
+      firstName: "Grace",
+      lastName: "Hopper",
+      starRating: 4,
+      clarityRating: 4,
+      reviewCount: 8,
+      traits: ["labs"],
+    };
+    document.body.innerHTML = `<div role="table"><div role="row"><div role="columnheader">Course</div><div role="columnheader">Course Title</div></div><div role="row" data-row-id="course-4880"><div role="rowheader"><button id="course-code" type="button">CSC 4880</button></div><div role="cell">Artificial Intelligence</div></div></div><div aria-label="Section List" role="group"><ul><li><h3>CSC 4880 — Artificial Intelligence</h3><dl><dt>Instructor</dt><dd>Dr. Ada Lovelace; Dr. Grace Hopper</dd></dl></li></ul></div>`;
+    const integration = new StudentCenterIntegration({
+      document,
+      professors: [professor, secondProfessor],
+      preferences: { ...createDefaultPreferences(), learningStyles: ["project-heavy"] },
+      useMockData: false,
+    });
+    integration.start();
+
+    const target = document.querySelector<HTMLButtonElement>("#course-code")!;
+    target.dispatchEvent(new Event("focus"));
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    expect(host.shadowRoot?.textContent).toContain("Dr. Ada Lovelace");
+    expect(host.shadowRoot?.textContent).toContain("Dr. Grace Hopper");
+    expect(host.shadowRoot?.textContent).toContain("Ada Lovelace is recommended");
+    expect(host.shadowRoot?.textContent).toContain("preference fit");
+
+    integration.updatePreferences({ ...createDefaultPreferences(), learningStyles: ["labs"] });
+    expect(host.shadowRoot?.textContent).toContain("Grace Hopper is recommended");
+    integration.stop();
+  });
+
+  it("shows a real PolyRatings comparison from a visible Class Search result", () => {
+    document.body.innerHTML = `<main><article><dl><dt>Class</dt><dd>CSC 4880</dd><dt>Course Title</dt><dd>Artificial Intelligence</dd><dt>Instructor</dt><dd><span title="Dr. Ada Lovelace"><span aria-hidden="false">Dr. Ada Lovelace</span></span></dd></dl></article></main>`;
+    const integration = new StudentCenterIntegration({
+      document,
+      professors: [professor],
+      preferences: { ...createDefaultPreferences(), learningStyles: ["project-heavy"] },
+      useMockData: false,
+    });
+    integration.start();
+
+    document.querySelector<HTMLElement>("[data-polyratings-course-hover-target]")!.click();
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    expect(host.shadowRoot?.textContent).toContain("3.6 overall");
+    expect(host.shadowRoot?.textContent).toContain("Ada Lovelace is recommended");
+    expect(host.shadowRoot?.textContent).not.toContain("fixture data");
+    integration.stop();
+  });
+
+  it("compares all visible instructors from a native Class Search course result", () => {
+    const secondProfessor: Professor = {
+      ...professor,
+      id: "fixture-grace",
+      name: "Grace Hopper",
+      firstName: "Grace",
+      lastName: "Hopper",
+      starRating: 4,
+      clarityRating: 4,
+      reviewCount: 8,
+      traits: ["labs"],
+    };
+    document.body.innerHTML = `<div><h2 id="class-search-course-heading">Artificial Intelligence <span>| CSC 4880</span></h2><table role="treegrid" aria-label="Artificial Intelligence, Computer Science 4880 Classes"><thead><tr><th role="columnheader" id="result-CLASS_SECTION">Section</th><th role="columnheader" id="result-INSTRUCTOR">Instructor</th></tr></thead><tbody><tr data-row-id="0" aria-level="1"><td role="rowheader" id="result-0_CLASS_SECTION">S01-LEC</td><td role="gridcell" id="result-0_INSTRUCTOR"><span><div aria-hidden="false">Dr. Ada Lovelace</div></span></td></tr><tr data-row-id="1" aria-level="1"><td role="rowheader" id="result-1_CLASS_SECTION">S02-LAB</td><td role="gridcell" id="result-1_INSTRUCTOR"><span><div aria-hidden="false">Dr. Grace Hopper</div></span></td></tr></tbody></table></div>`;
+    const rows = findCourseRows(document);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].course).toEqual({ code: "CSC 4880", title: "Artificial Intelligence" });
+    expect(rows[0].instructors.map((instructor) => instructor.displayName)).toEqual(["Dr. Ada Lovelace", "Dr. Grace Hopper"]);
+
+    const integration = new StudentCenterIntegration({
+      document,
+      professors: [professor, secondProfessor],
+      preferences: { ...createDefaultPreferences(), learningStyles: ["labs"] },
+      useMockData: false,
+    });
+    integration.start();
+    const heading = document.querySelector<HTMLElement>("#class-search-course-heading")!;
+    expect(heading.getAttribute("data-polyratings-course-hover-target")).toBe("true");
+    heading.click();
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    expect(host.shadowRoot?.textContent).toContain("Dr. Ada Lovelace");
+    expect(host.shadowRoot?.textContent).toContain("Dr. Grace Hopper");
+    expect(host.shadowRoot?.textContent).toContain("Grace Hopper is recommended");
     integration.stop();
   });
 
@@ -424,16 +591,17 @@ describe("Student Center integration fixture", () => {
     expect(host.shadowRoot?.textContent).toContain("CSC 4880");
     expect(host.shadowRoot?.textContent).toContain("Artificial Intelligence");
     expect(host.shadowRoot?.textContent).toContain("currently visible in Student Center");
-    expect(host.shadowRoot?.textContent).toContain("Personalized recommendations coming soon.");
+    expect(host.shadowRoot?.textContent).toContain("Ada Lovelace is recommended");
+    expect(host.shadowRoot?.textContent).toContain("52% preference fit");
     expect(host.shadowRoot?.textContent).toContain("fixture data");
 
     host.shadowRoot?.querySelector<HTMLButtonElement>(".compare")?.click();
     expect(host.shadowRoot?.textContent).toContain("Professor comparison");
-    expect(host.shadowRoot?.textContent).toContain("Workload: Unavailable");
+    expect(host.shadowRoot?.textContent).toContain("Matches Project-heavy");
     integration.stop();
   });
 
-  it("keeps real Student Center course cards in a no-data state and switches cleanly to a professor card", () => {
+  it("uses provider-backed ratings for real Student Center course cards and switches cleanly to a professor card", () => {
     document.body.innerHTML = `<main aria-label="Class Schedule" role="treegrid"><div role="row"><div role="columnheader">Class</div><div role="columnheader">Description</div><div role="columnheader">Instructor</div></div><div role="row" data-row-id="course-1"><div role="gridcell" header="Class">CSC 4880</div><div role="gridcell" header="Description">Artificial Intelligence</div><div role="gridcell" header="Instructor"><span aria-hidden="false">Dr. Ada Lovelace</span></div></div></main>`;
     const integration = new StudentCenterIntegration({ document, professors: [professor], useMockData: false });
     integration.start();
@@ -441,8 +609,8 @@ describe("Student Center integration fixture", () => {
     const professorTarget = document.querySelector<HTMLElement>("[data-polyratings-hover-target]")!;
     courseTarget.click();
     const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
-    expect(host.shadowRoot?.textContent).toContain("Rating unavailable");
-    expect(host.shadowRoot?.textContent).not.toContain("4.6 overall");
+    expect(host.shadowRoot?.textContent).toContain("3.6 overall");
+    expect(host.shadowRoot?.textContent).not.toContain("fixture data");
 
     professorTarget.click();
     expect(document.querySelectorAll("#polyratings-hover-host")).toHaveLength(1);

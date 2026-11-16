@@ -1,9 +1,11 @@
 import type { Course, CourseProfessorComparison } from "../models/professor";
+import { traitLabel } from "../models/preferences";
 
 export interface CourseHoverCardProps {
   document: Document;
   course: Course;
   comparisons: CourseProfessorComparison[];
+  recommendation: CourseProfessorComparison | null;
   usesMockData: boolean;
   onCompare: (event: Event) => void;
 }
@@ -19,6 +21,27 @@ function availability(comparison: CourseProfessorComparison, usesMockData: boole
   if (comparison.overallRating === null || comparison.reviewCount === null) return "Rating unavailable";
   const label = `${comparison.overallRating.toFixed(1)} overall • ${comparison.reviewCount} reviews`;
   return usesMockData ? `${label} • fixture data` : label;
+}
+
+function preferenceLine(comparison: CourseProfessorComparison): string {
+  if (comparison.overallRating === null) return "PolyRatings data unavailable";
+  if (comparison.preferenceFit === null) return "Set learning-style preferences to personalize this comparison.";
+  if (comparison.matchedTraits.length > 0) {
+    return `${comparison.preferenceFit}% preference fit • Matches ${comparison.matchedTraits.map(traitLabel).join(", ")}`;
+  }
+  return `${comparison.preferenceFit}% preference fit • No selected teaching-preference tags are available yet`;
+}
+
+function recommendationLine(
+  recommendation: CourseProfessorComparison | null,
+  comparisons: CourseProfessorComparison[],
+): string {
+  if (comparisons.length === 0) return "Select Sections for this course to compare the professors currently available.";
+  if (!recommendation) return "PolyRatings has no matching rating record for the instructors currently visible.";
+  if (recommendation.preferenceFit === null) {
+    return `${recommendation.instructor.displayName} is highest rated among the currently visible professors at ${recommendation.overallRating?.toFixed(2)} overall.`;
+  }
+  return `${recommendation.instructor.displayName} is recommended at ${recommendation.preferenceFit}% preference fit and ${recommendation.overallRating?.toFixed(2)} overall. ${recommendation.fitLine ?? ""}`.trim();
 }
 
 /**
@@ -46,6 +69,7 @@ export function CourseHoverCard(props: CourseHoverCardProps): HTMLElement {
         element(props.document, "p", "prof-name", comparison.instructor.displayName),
         element(props.document, "p", "prof-meta", availability(comparison, props.usesMockData)),
       );
+      item.append(element(props.document, "p", "course-themes", preferenceLine(comparison)));
       if (comparison.reviewThemes.length > 0) {
         item.append(element(props.document, "p", "course-themes", `Review themes: ${comparison.reviewThemes.join(", ")}`));
       }
@@ -57,12 +81,13 @@ export function CourseHoverCard(props: CourseHoverCardProps): HTMLElement {
   const recommendation = element(props.document, "section", "summary course-recommendation");
   recommendation.append(
     element(props.document, "h3", undefined, "Recommended professor"),
-    element(props.document, "p", undefined, "Personalized recommendations coming soon."),
+    element(props.document, "p", undefined, recommendationLine(props.recommendation, props.comparisons)),
   );
   body.append(recommendation);
 
   const compare = element(props.document, "button", "compare", "Compare Professors") as HTMLButtonElement;
   compare.type = "button";
+  compare.disabled = props.comparisons.length === 0;
   compare.addEventListener("click", props.onCompare);
   body.append(compare);
   return body;
@@ -94,13 +119,15 @@ export function CourseProfessorComparisonView(props: CourseComparisonViewProps):
       element(props.document, "h3", undefined, comparison.instructor.displayName),
       element(props.document, "p", "prof-meta", availability(comparison, props.usesMockData)),
     );
-    const traits = [
-      ["Workload", comparison.workload],
-      ["Difficulty", comparison.difficulty],
-      ["Clarity", comparison.clarity],
-      ["Flexibility", comparison.flexibility],
-    ].map(([label, value]) => `${label}: ${value ?? "Unavailable"}`);
-    item.append(element(props.document, "p", "comparison-traits", traits.join(" • ")));
+    item.append(element(props.document, "p", "comparison-traits", preferenceLine(comparison)));
+    if (comparison.conflictingTraits.length > 0) {
+      item.append(element(
+        props.document,
+        "p",
+        "comparison-traits",
+        `Potential tradeoff: ${comparison.conflictingTraits.map(traitLabel).join(", ")}`,
+      ));
+    }
     if (comparison.reviewThemes.length > 0) {
       item.append(element(props.document, "p", "course-themes", `Review themes: ${comparison.reviewThemes.join(", ")}`));
     }

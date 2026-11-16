@@ -10,7 +10,7 @@ export interface InstructorCandidate {
   source?: InstructorDetectionSource;
 }
 
-export type InstructorDetectionSource = "class-search" | "my-schedule-main-row" | "my-schedule-expanded-detail" | "schedule-builder" | "shopping-cart";
+export type InstructorDetectionSource = "class-search" | "my-schedule-main-row" | "my-schedule-expanded-detail" | "schedule-builder" | "shopping-cart" | "view-wait-list" | "drop-classes";
 
 export interface InstructorDetectionResult {
   instructorFieldCount: number;
@@ -47,6 +47,10 @@ export interface CourseHoverRow {
 
 const scheduleBuilderContainerSelector = "[aria-label='Section List'][role='group'], [aria-label='Sections List'][role='table']";
 const scheduleScopeSelector = `${scheduleBuilderContainerSelector}, [aria-label='Class Schedule']`;
+// View Wait List has a native Sections table but its header and data rows use
+// different nested MUI layouts. It needs its own semantic mapping below.
+const viewWaitListTableSelector = "[aria-label='Sections'][role='table']";
+const dropClassesTableSelector = "[aria-label='Classes'][role='table']";
 // Shopping Cart is its own document in TargetContent. This selector is
 // deliberately scoped to its verified semantic root so similarly named cells
 // in other Student Center pages cannot become professor hover targets.
@@ -65,7 +69,7 @@ function extractInstructorText(element: HTMLElement): string {
 }
 
 function findSectionContainer(element: HTMLElement): HTMLElement | null {
-  const sectionList = element.closest<HTMLElement>("[role='group'][aria-label='Section List'], [aria-label='Class Schedule']");
+  const sectionList = element.closest<HTMLElement>(`${scheduleScopeSelector}, ${viewWaitListTableSelector}, ${dropClassesTableSelector}`);
   const listItem = element.closest<HTMLElement>("li");
   if (sectionList && listItem && sectionList.contains(listItem)) return listItem;
   // A tabular schedule puts one class per row, which is the smallest scope that
@@ -199,6 +203,41 @@ function isInstructorLabel(label: HTMLElement): boolean {
   return isInstructorText(normalizedText(label));
 }
 
+interface ScheduleBuilderSectionPageContext {
+  /** The native section table, not an arbitrary similarly named list. */
+  table: HTMLElement;
+  /** The one course heading that describes the currently rendered sections. */
+  heading: HTMLElement;
+  course: Course;
+}
+
+/**
+ * On Schedule Builder's destination page, the course heading and section rows
+ * are siblings inside a form. The individual rows contain only section data,
+ * so their shared course context must be taken from that semantic heading.
+ */
+function findScheduleBuilderSectionPageContexts(root: ParentNode): ScheduleBuilderSectionPageContext[] {
+  const contexts: ScheduleBuilderSectionPageContext[] = [];
+  for (const table of root.querySelectorAll<HTMLElement>("[aria-label='Sections List'][role='table']")) {
+    const hasInstructorColumn = Array.from(table.querySelectorAll<HTMLElement>("[role='columnheader']"))
+      .some(isInstructorLabel);
+    if (!hasInstructorColumn) continue;
+
+    const form = table.closest<HTMLElement>("form");
+    if (!form) continue;
+    const heading = Array.from(form.querySelectorAll<HTMLElement>("h1, h2, [role='heading']"))
+      .find((candidate) => {
+        if (!(candidate.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING)) return false;
+        return courseFromText(extractInstructorText(candidate)) !== null;
+      });
+    if (!heading) continue;
+    const course = courseFromText(extractInstructorText(heading));
+    if (!course) continue;
+    contexts.push({ table, heading, course });
+  }
+  return contexts;
+}
+
 function findAssociatedValue(label: HTMLElement): HTMLElement | null {
   const directValue = label.nextElementSibling;
   if (directValue instanceof HTMLElement && directValue.tagName === "DD") return directValue;
@@ -233,7 +272,14 @@ function visibleInstructorTargets(value: HTMLElement): HTMLElement[] {
   if (titled.length > 0) return titled;
   const visibleLeaves = Array.from(value.querySelectorAll<HTMLElement>("[aria-hidden='false']"))
     .filter((element) => !element.querySelector("[aria-hidden='false']"));
-  return visibleLeaves.length > 0 ? visibleLeaves : [value];
+  if (visibleLeaves.length > 0) return visibleLeaves;
+
+  // View Wait List renders the native instructor value as a plain paragraph
+  // inside the semantically identified cell. Prefer that text leaf so the
+  // hover target is the professor's name, never the whole enrollment row.
+  const textLeaves = Array.from(value.querySelectorAll<HTMLElement>("p, span"))
+    .filter((element) => !element.querySelector("p, span") && extractInstructorText(element).trim().length > 0);
+  return textLeaves.length > 0 ? textLeaves : [value];
 }
 
 function visibleInstructorTarget(value: HTMLElement): HTMLElement {
@@ -396,6 +442,65 @@ function findMainRowInstructorCandidates(root: ParentNode): InstructorCandidate[
   return candidates;
 }
 
+/**
+ * View Wait List keeps semantic column headers but renders each section inside
+ * a differently shaped nested row. A structural header path therefore cannot
+ * identify the matching cell. Its visible instructor text is still aligned
+ * beneath the native Instructor header, which is stable across responsive
+ * layouts and avoids generated class names or hard-coded column numbers.
+ */
+function findPositionallyAlignedInstructorCandidates(
+  root: ParentNode,
+  tableSelector: string,
+  source: Extract<InstructorDetectionSource, "view-wait-list" | "drop-classes">,
+  acceptsTable: (table: HTMLElement) => boolean,
+): InstructorCandidate[] {
+  const candidates: InstructorCandidate[] = [];
+  for (const table of root.querySelectorAll<HTMLElement>(tableSelector)) {
+    if (!acceptsTable(table)) continue;
+    const instructorHeader = Array.from(table.querySelectorAll<HTMLElement>("[role='columnheader']")).find(isInstructorLabel);
+    if (!instructorHeader) continue;
+    const headerRect = instructorHeader.getBoundingClientRect();
+    if (headerRect.width <= 0 && headerRect.right <= headerRect.left) continue;
+
+    for (const row of table.querySelectorAll<HTMLElement>("[role='row']")) {
+      if (row.querySelector("[role='columnheader']")) continue;
+      const cells = Array.from(row.querySelectorAll<HTMLElement>("[role='cell'], [role='gridcell']"))
+        .filter((cell) => cell.closest("[role='row']") === row);
+      for (const cell of cells) {
+        for (const target of visibleInstructorTargets(cell)) {
+          const targetRect = target.getBoundingClientRect();
+          if (targetRect.width <= 0 && targetRect.right <= targetRect.left) continue;
+          const center = targetRect.left + targetRect.width / 2;
+          if (center < headerRect.left || center > headerRect.right) continue;
+          const name = target.getAttribute("title")?.trim() || extractInstructorText(target).trim();
+          if (name) candidates.push(createInstructorCandidate(target, name, source));
+        }
+      }
+    }
+  }
+  return candidates;
+}
+
+function findViewWaitListCandidates(root: ParentNode): InstructorCandidate[] {
+  return findPositionallyAlignedInstructorCandidates(root, viewWaitListTableSelector, "view-wait-list", () => true);
+}
+
+function isDropClassesTable(table: HTMLElement): boolean {
+  const url = table.ownerDocument.defaultView?.location.href.toUpperCase() ?? "";
+  if (url.includes("H_DROP_CLASSES")) return true;
+  // The verified page instruction is present in the native document and keeps
+  // this matcher from treating Shopping Cart's separate Classes table as Drop
+  // Classes when URL information is unavailable in a test or embedded frame.
+  return Array.from(table.ownerDocument.querySelectorAll<HTMLElement>("h1, h2, [role='heading']"))
+    .some((heading) => normalizedText(heading).includes("select classes to drop"));
+}
+
+/** Drop Classes shares View Wait List's differently nested section rows. */
+function findDropClassesCandidates(root: ParentNode): InstructorCandidate[] {
+  return findPositionallyAlignedInstructorCandidates(root, dropClassesTableSelector, "drop-classes", isDropClassesTable);
+}
+
 function findClassSearchDesktopCandidates(root: ParentNode): InstructorCandidate[] {
   const candidates: InstructorCandidate[] = [];
   for (const table of root.querySelectorAll<HTMLTableElement>("table")) {
@@ -418,6 +523,39 @@ function findClassSearchDesktopCandidates(root: ParentNode): InstructorCandidate
     }
   }
   return candidates;
+}
+
+interface ClassSearchCoursePageContext {
+  /** A native search-results treegrid for exactly one rendered course. */
+  table: HTMLTableElement;
+  /** Its sibling course heading, which contains both title and catalog code. */
+  heading: HTMLElement;
+  course: Course;
+}
+
+/**
+ * Class Search renders a separate semantic treegrid under each course h2. The
+ * heading and table are direct siblings, so this avoids confusing results with
+ * filter controls or with a second course elsewhere on the page.
+ */
+function findClassSearchCoursePageContexts(root: ParentNode): ClassSearchCoursePageContext[] {
+  const contexts: ClassSearchCoursePageContext[] = [];
+  for (const table of root.querySelectorAll<HTMLTableElement>("table[role='treegrid'][aria-label]")) {
+    if (table.closest(scheduleScopeSelector)) continue;
+    const hasInstructorColumn = Array.from(table.querySelectorAll<HTMLElement>("thead th[role='columnheader'][id]"))
+      .some((header) => header.id.toUpperCase().endsWith("-INSTRUCTOR") && isInstructorLabel(header));
+    if (!hasInstructorColumn) continue;
+
+    const parent = table.parentElement;
+    if (!parent) continue;
+    const heading = Array.from(parent.children)
+      .find((child): child is HTMLElement => child instanceof HTMLElement && child.matches("h2"));
+    if (!heading) continue;
+    const course = courseFromText(extractInstructorText(heading));
+    if (!course) continue;
+    contexts.push({ table, heading, course });
+  }
+  return contexts;
 }
 
 /**
@@ -540,6 +678,32 @@ function findScheduleBuilderCourseSelectionCandidates(root: ParentNode): CourseC
 }
 
 /**
+ * The Select Sections destination does not repeat the course code in every
+ * row. Its course h2 is therefore the safe, non-native target for a single
+ * comparison of all instructors rendered in the semantic Sections List.
+ */
+function findScheduleBuilderSectionPageCourseCandidates(root: ParentNode): CourseCandidate[] {
+  return findScheduleBuilderSectionPageContexts(root).map((context) => ({
+    element: context.heading,
+    scopeElement: context.table,
+    course: context.course,
+    source: "schedule-builder",
+    clickOpensCard: true,
+  }));
+}
+
+/** One comparison target per visible Class Search result group. */
+function findClassSearchCoursePageCourseCandidates(root: ParentNode): CourseCandidate[] {
+  return findClassSearchCoursePageContexts(root).map((context) => ({
+    element: context.heading,
+    scopeElement: context.table,
+    course: context.course,
+    source: "class-search",
+    clickOpensCard: true,
+  }));
+}
+
+/**
  * Reads only the verified Shopping Cart Class and Description cells. The
  * target is the displayed course-code value, never a checkbox, row expander,
  * enrollment action, or another Cart control.
@@ -605,6 +769,8 @@ export function findCourseCandidates(root: ParentNode = document): CourseCandida
     ...findDefinitionListCourseCandidates(root),
     ...findMyScheduleCourseCandidates(root),
     ...findScheduleBuilderCourseSelectionCandidates(root),
+    ...findScheduleBuilderSectionPageCourseCandidates(root),
+    ...findClassSearchCoursePageCourseCandidates(root),
     ...findShoppingCartCourseCandidates(root),
   ];
   return candidates.filter((candidate, index, all) => (
@@ -623,8 +789,22 @@ export function findCourseRows(root: ParentNode = document): CourseHoverRow[] {
   return courses.map((candidate) => {
     const sameCourse = courses.filter((other) => other.course.code === candidate.course.code);
     const scopes = new Set(sameCourse.map((other) => other.scopeElement));
-    const courseInstructors = instructors
-      .filter((instructor) => instructor.sectionElement !== null && scopes.has(instructor.sectionElement))
+    // A course-result table owns all of its section rows. Schedule Builder can
+    // additionally render a course selector and its open Section List as
+    // sibling components, which requires the verified course-code fallback.
+    const matchingInstructors = instructors
+      .filter((instructor) => {
+        if (instructor.sectionElement === null) return false;
+        if (scopes.has(instructor.sectionElement)) return true;
+        if ([...scopes].some((scope) => scope.contains(instructor.sectionElement!))) return true;
+        // Only Schedule Builder splits the selected course row from its open
+        // section list. Do not use a course-code match to bridge unrelated
+        // surfaces that happen to render the same course elsewhere on a page.
+        return candidate.source === "schedule-builder"
+          && instructor.source === "schedule-builder"
+          && instructor.courseCode === candidate.course.code;
+      });
+    const courseInstructors = matchingInstructors
       .map<CourseInstructor>((instructor) => ({
         instructorName: instructor.instructorName,
         displayName: instructor.displayName.replace(/\s+/g, " ").trim(),
@@ -637,7 +817,10 @@ export function findCourseRows(root: ParentNode = document): CourseHoverRow[] {
       scopeElement: candidate.scopeElement,
       course: { code: candidate.course.code, title },
       instructors: courseInstructors,
-      visibleSectionCount: scopes.size,
+      visibleSectionCount: new Set([
+        ...scopes,
+        ...matchingInstructors.map((instructor) => instructor.sectionElement).filter((section): section is HTMLElement => section !== null),
+      ]).size,
       source: candidate.source,
       clickOpensCard: candidate.clickOpensCard,
     };
@@ -730,10 +913,28 @@ export function findInstructorDetection(root: ParentNode = document): Instructor
   const directCandidates = [...new Set(elements)].map((element) => createInstructorCandidate(element));
   const fieldDetection = findInstructorFieldCandidates(root);
   const mainRowCandidates = findMainRowInstructorCandidates(root);
+  const viewWaitListCandidates = findViewWaitListCandidates(root);
+  const dropClassesCandidates = findDropClassesCandidates(root);
   const classSearchCandidates = findClassSearchCandidates(root);
   const classSearchDesktopCandidates = findClassSearchDesktopCandidates(root);
   const shoppingCartCandidates = findShoppingCartCandidates(root);
-  const candidates = [...directCandidates, ...fieldDetection.candidates, ...mainRowCandidates, ...classSearchCandidates, ...classSearchDesktopCandidates, ...shoppingCartCandidates]
+  const sectionPageContexts = findScheduleBuilderSectionPageContexts(root);
+  const classSearchCourseContexts = findClassSearchCoursePageContexts(root);
+  const candidates = [...directCandidates, ...fieldDetection.candidates, ...mainRowCandidates, ...viewWaitListCandidates, ...dropClassesCandidates, ...classSearchCandidates, ...classSearchDesktopCandidates, ...shoppingCartCandidates]
+    .map((candidate) => {
+      if (candidate.courseCode || !candidate.sectionElement) return candidate;
+      const context = sectionPageContexts.find(({ table }) => table.contains(candidate.sectionElement!));
+      // This row is known to be in the current Schedule Builder course's
+      // Sections List, so inheriting the heading's course code is precise.
+      if (context) {
+        return { ...candidate, courseCode: context.course.code, source: candidate.source ?? "schedule-builder" };
+      }
+      const classSearchContext = classSearchCourseContexts
+        .find(({ table }) => table.contains(candidate.sectionElement!));
+      return classSearchContext
+        ? { ...candidate, courseCode: classSearchContext.course.code, source: candidate.source ?? "class-search" }
+        : candidate;
+    })
     .filter((candidate, index, all) => all.findIndex((other) => other.element === candidate.element && other.instructorName === candidate.instructorName) === index)
     .filter((candidate) => candidate.instructorName.trim().length > 0);
   return {

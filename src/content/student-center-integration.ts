@@ -10,7 +10,7 @@ import {
 import { createDefaultPreferences, type StudentPreferences } from "../models/preferences";
 import { courseAliases, courseTitle } from "../data/course-crosswalk";
 import { buildClassSummary, matchProfessor, rankProfessors } from "../services/preference-matching";
-import { buildCourseProfessorComparisons } from "../services/course-professor-comparison";
+import { buildCourseProfessorComparisons, recommendCourseProfessor } from "../services/course-professor-comparison";
 import { CourseHoverCard, CourseProfessorComparisonView } from "./course-hover-card";
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
 import {
@@ -58,6 +58,7 @@ interface ResolvedRow {
 interface ResolvedCourseRow {
   row: CourseHoverRow;
   comparisons: CourseProfessorComparison[];
+  recommendation: CourseProfessorComparison | null;
 }
 
 type HoverRow = ClassRow | CourseHoverRow;
@@ -288,9 +289,11 @@ export class StudentCenterIntegration {
   }
 
   private resolveCourseRow(row: CourseHoverRow): ResolvedCourseRow {
+    const comparisons = buildCourseProfessorComparisons(row.instructors, this.options.professors, this.preferences);
     return {
       row,
-      comparisons: buildCourseProfessorComparisons(row.instructors, this.options.professors, this.useMockData),
+      comparisons,
+      recommendation: recommendCourseProfessor(comparisons),
     };
   }
 
@@ -607,6 +610,7 @@ export class StudentCenterIntegration {
       document: this.options.document,
       course: resolved.row.course,
       comparisons: resolved.comparisons,
+      recommendation: resolved.recommendation,
       usesMockData: this.useMockData,
       onCompare: (event) => {
         event.preventDefault();
