@@ -8,8 +8,10 @@ import {
   type Professor,
 } from "../models/professor";
 import { createDefaultPreferences, type StudentPreferences } from "../models/preferences";
+import { favoriteId, type FavoriteClass } from "../models/favorites";
 import { courseAliases, courseTitle } from "../data/course-crosswalk";
 import { buildClassSummary, matchProfessor, rankProfessors } from "../services/preference-matching";
+import { synthesizeReviews, type ReviewSynthesis } from "../services/review-synthesis";
 import { buildCourseProfessorComparisons, recommendCourseProfessor } from "../services/course-professor-comparison";
 import { CourseHoverCard, CourseProfessorComparisonView } from "./course-hover-card";
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
@@ -44,6 +46,9 @@ export interface StudentCenterIntegrationOptions {
   useMockData?: boolean;
   details?: ProfessorDetailSource;
   preferences?: StudentPreferences;
+  favorites?: FavoriteClass[];
+  /** Persists a saved class. Omitted in tests and fixtures, which keep favorites in memory. */
+  onToggleFavorite?: (favorite: FavoriteClass, isSaved: boolean) => void;
   diagnostics?: IntegrationDiagnostics;
 }
 
@@ -90,11 +95,15 @@ export class StudentCenterIntegration {
   /** Set while the card shows one professor's detail view rather than the list. */
   private activeProfessorId: string | null = null;
   private host: HTMLElement | null = null;
+  /** Guards the row's focus handler while focus is restored after an Escape. */
+  private suppressFocusOpen = false;
   private preferences: StudentPreferences;
+  private favoriteIds: Set<string>;
   private readonly useMockData: boolean;
 
   constructor(private readonly options: StudentCenterIntegrationOptions) {
     this.preferences = options.preferences ?? createDefaultPreferences();
+    this.favoriteIds = new Set((options.favorites ?? []).map((favorite) => favorite.id));
     this.useMockData = options.useMockData ?? isFixtureDocument(options.document);
   }
 
@@ -139,6 +148,11 @@ export class StudentCenterIntegration {
   /** Re-renders an open card so a preference change is reflected immediately. */
   updatePreferences(preferences: StudentPreferences): void {
     this.preferences = preferences;
+    if (this.activeRow) this.refresh(this.activeRow);
+  }
+
+  updateFavorites(favorites: FavoriteClass[]): void {
+    this.favoriteIds = new Set(favorites.map((favorite) => favorite.id));
     if (this.activeRow) this.refresh(this.activeRow);
   }
 
@@ -196,10 +210,16 @@ export class StudentCenterIntegration {
       this.scheduleHide();
     });
     row.element.addEventListener("focus", () => {
+      if (this.suppressFocusOpen) return;
       this.clearManualDismissal();
       this.show(this.currentTarget(row), "focus");
     });
-    row.element.addEventListener("blur", () => this.scheduleHide());
+    row.element.addEventListener("blur", (event) => {
+      // Tabbing into the card must not hide the thing being tabbed into.
+      const next = (event as FocusEvent).relatedTarget;
+      if (next instanceof Node && this.host?.contains(next)) return;
+      this.scheduleHide();
+    });
     row.element.addEventListener("click", () => {
       if (isCourseHoverRow(row) && !row.clickOpensCard) return;
       this.clearManualDismissal();
@@ -356,11 +376,44 @@ export class StudentCenterIntegration {
     this.openMode = null;
   }
 
+  private focusIsInsideCard(): boolean {
+    const active = this.options.document.activeElement;
+    return Boolean(active && this.host && (active === this.host || this.host.contains(active)));
+  }
+
+  private firstFocusableInCard(): HTMLElement | null {
+    const card = this.host?.shadowRoot?.querySelector(".card");
+    return card?.querySelector<HTMLElement>("button, [href], [tabindex]:not([tabindex='-1'])") ?? null;
+  }
+
   private handleKeydown = (event: KeyboardEvent): void => {
-    if (event.key !== "Escape" || !this.activeRow) return;
+    if (!this.activeRow) return;
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      const target = this.activeRow.element;
+      const shouldRestoreFocus = this.focusIsInsideCard();
+      this.dismissManually();
+      if (shouldRestoreFocus) {
+        // Returning focus to the row would otherwise re-trigger its focus
+        // handler and reopen the card the student just dismissed.
+        this.suppressFocusOpen = true;
+        target.focus();
+        this.suppressFocusOpen = false;
+      }
+      return;
+    }
+
+    // The card is appended to the end of the body, so it is nowhere near the
+    // row in tab order. Bridge the two, otherwise the dialog is unreachable.
+    if (event.key !== "Tab" || event.shiftKey || this.host?.hidden) return;
+    if (this.options.document.activeElement !== this.activeRow.element) return;
+    const first = this.firstFocusableInCard();
+    if (!first) return;
     event.preventDefault();
-    event.stopPropagation();
-    this.dismissManually();
+    this.cancelHide();
+    first.focus();
   };
 
   private handleDocumentPointerDown = (event: Event): void => {
@@ -491,8 +544,15 @@ export class StudentCenterIntegration {
     card.className = "card";
     card.setAttribute("role", "dialog");
     card.setAttribute("aria-label", "PolyProf professor information");
+    card.tabIndex = -1;
     card.addEventListener("pointerenter", () => this.cancelHide());
     card.addEventListener("pointerleave", () => this.scheduleHide());
+    host.addEventListener("focusin", () => this.cancelHide());
+    host.addEventListener("focusout", (event) => {
+      const next = (event as FocusEvent).relatedTarget;
+      if (next instanceof Node && (this.host?.contains(next) || next === this.activeRow?.element)) return;
+      this.scheduleHide();
+    });
     shadow.append(style, card);
     this.options.document.body.append(host);
     this.host = host;
@@ -595,8 +655,57 @@ export class StudentCenterIntegration {
       body.append(this.element("p", "unrated", `${name} — no ratings available yet`));
     }
 
+    const favoriteToggle = this.renderFavoriteToggle(resolved, card, showClose);
+    if (favoriteToggle) body.append(favoriteToggle);
+
     body.append(this.renderSummary(resolved.rated));
     card.append(body);
+  }
+
+  /** Saves the hovered class, tagged with whichever professor currently ranks first. */
+  private renderFavoriteToggle(
+    resolved: ResolvedRow,
+    card: HTMLElement,
+    showClose: boolean,
+  ): HTMLElement | null {
+    const courseCode = resolved.row.courseCode;
+    if (!courseCode) return null;
+
+    const top = resolved.rated[0] ?? null;
+    const id = favoriteId(courseCode, top?.id ?? null);
+    const isSaved = this.favoriteIds.has(id);
+
+    const button = this.element(
+      "button",
+      isSaved ? "favorite is-saved" : "favorite",
+      isSaved ? `★ Saved — ${courseCode}` : `☆ Save ${courseCode}`,
+    ) as HTMLButtonElement;
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(isSaved));
+    button.setAttribute(
+      "aria-label",
+      isSaved ? `Remove ${courseCode} from favorites` : `Save ${courseCode} to favorites`,
+    );
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (isSaved) this.favoriteIds.delete(id);
+      else this.favoriteIds.add(id);
+      this.options.onToggleFavorite?.(
+        {
+          id,
+          courseCode,
+          courseTitle: courseTitle(courseCode) ?? null,
+          professorId: top?.id ?? null,
+          professorName: top?.name ?? null,
+          starRating: top?.starRating ?? null,
+          clarityRating: top?.clarityRating ?? null,
+          savedAt: new Date().toISOString(),
+        },
+        !isSaved,
+      );
+      this.renderList(card, resolved, showClose);
+    });
+    return button;
   }
 
   private renderCourseList(card: HTMLElement, resolved: ResolvedCourseRow): void {
@@ -649,6 +758,53 @@ export class StudentCenterIntegration {
     return summary;
   }
 
+  /** Themes, strengths, and concerns drawn from this professor's own review text. */
+  private renderReviewSynthesis(professor: Professor, reviews: Professor["reviews"]): HTMLElement {
+    const synthesis: ReviewSynthesis = synthesizeReviews(professor, reviews);
+    const section = this.element("div", "detail-card synthesis");
+    section.append(
+      this.element("h3", undefined, "Review summary"),
+      this.element("p", undefined, synthesis.overview),
+    );
+
+    if (synthesis.themes.length > 0) {
+      section.append(this.element("p", "synthesis-label", "Common themes"));
+      const themes = this.element("div", "tags");
+      for (const theme of synthesis.themes) {
+        const chip = this.element("span", `tag theme-${theme.sentiment}`, `${theme.topic} · ${theme.mentions}`);
+        chip.title = `${theme.topic} mentioned in ${theme.mentions} ${theme.mentions === 1 ? "review" : "reviews"} (${theme.sentiment})`;
+        themes.append(chip);
+      }
+      section.append(themes);
+    }
+
+    for (const group of [
+      { label: "Strengths", items: synthesis.strengths, className: "synthesis-strength" },
+      { label: "Concerns", items: synthesis.concerns, className: "synthesis-concern" },
+    ]) {
+      if (group.items.length === 0) continue;
+      section.append(this.element("p", "synthesis-label", group.label));
+      const list = this.element("ul", "synthesis-list");
+      for (const item of group.items) list.append(this.element("li", group.className, item));
+      section.append(list);
+    }
+
+    if (synthesis.strengths.length === 0 && synthesis.concerns.length === 0 && synthesis.reviewsAnalyzed > 0) {
+      section.append(
+        this.element("p", "note", "Reviewers did not agree often enough to list distinct strengths or concerns."),
+      );
+    }
+
+    section.append(
+      this.element(
+        "p",
+        "note",
+        `Counted from the wording of ${synthesis.reviewsAnalyzed} PolyRatings ${synthesis.reviewsAnalyzed === 1 ? "review" : "reviews"}; no AI model is used.`,
+      ),
+    );
+    return section;
+  }
+
   private renderDetail(card: HTMLElement, resolved: ResolvedRow, professor: Professor, showClose = true): void {
     this.activeProfessorId = professor.id;
     card.replaceChildren();
@@ -687,6 +843,10 @@ export class StudentCenterIntegration {
     // deciding about; the rest follow in recency order.
     const scoped = scopeToCourse(professor, resolved.aliases);
     const ordered = [...scoped.reviews, ...professor.reviews.filter((review) => !scoped.reviews.includes(review))];
+
+    if (this.details.has(professor.id)) {
+      body.append(this.renderReviewSynthesis(professor, ordered));
+    }
 
     const reviewCard = this.element("div", "detail-card");
     reviewCard.append(this.element("h3", undefined, `Reviews (${professor.reviewCount} total)`));

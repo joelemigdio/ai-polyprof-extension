@@ -583,7 +583,9 @@ function findShoppingCartCandidates(root: ParentNode): InstructorCandidate[] {
           const target = targets[index] ?? targets[0] ?? cell;
           const title = target.getAttribute("title")?.trim();
           const candidate = createInstructorCandidate(target, title || name, "shopping-cart");
-          candidates.push({ ...candidate, sectionElement: row });
+          // The cart row, not the container the generic search settles on, is
+          // what carries the Class cell, so the code must be read from it too.
+          candidates.push({ ...candidate, sectionElement: row, courseCode: findCourseCode(row) });
         }
       }
     }

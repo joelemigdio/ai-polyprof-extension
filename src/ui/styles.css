@@ -73,6 +73,22 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
   width: 34px;
 }
 .header-button:hover { background: rgb(255 255 255 / 18%); }
+.header-button.is-active { background: rgb(255 255 255 / 24%); }
+.header-actions { display: flex; gap: 8px; }
+.header-button { position: relative; }
+.header-badge {
+  background: var(--gold);
+  border-radius: var(--pill);
+  color: var(--green-900);
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+  min-width: 16px;
+  padding: 3px 4px;
+  position: absolute;
+  right: -5px;
+  top: -5px;
+}
 
 /* "Matching on" banner */
 .matching-banner {
@@ -215,6 +231,28 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
   width: 100%;
 }
 button.entity-card:hover { border-color: var(--border-strong); box-shadow: 0 2px 6px rgb(30 61 47 / 10%); }
+
+/* The star sits outside the card button, since a button cannot nest in a button. */
+.entity-card-wrap { position: relative; }
+.favorite-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-control);
+  bottom: 10px;
+  color: var(--muted);
+  display: flex;
+  height: 30px;
+  justify-content: center;
+  position: absolute;
+  right: 9px;
+  width: 30px;
+}
+.favorite-toggle:hover { background: var(--green-100); color: var(--green-900); }
+.favorite-toggle.is-favorite { color: var(--amber); }
+.favorite-toggle.is-favorite .icon { fill: var(--gold); }
+/* Keeps the fit line from running under the star. */
+.entity-card-wrap .fit-line { padding-right: 32px; }
 
 .card-top { align-items: flex-start; display: flex; gap: 10px; justify-content: space-between; }
 /* Allows the course list to ellipsize instead of forcing the card wider. */
@@ -367,6 +405,39 @@ button.entity-card:hover { border-color: var(--border-strong); box-shadow: 0 2px
 .review-origin { font-size: 0.92rem; font-weight: 700; }
 .review-text { color: var(--ink); font-size: 0.92rem; line-height: 1.45; margin: 9px 0 13px; }
 
+/* Review summary */
+.reviews-head h2 { align-items: center; display: flex; gap: 6px; }
+.synthesis-overview { font-size: 0.92rem; line-height: 1.45; margin: 0; }
+.synthesis-label {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  margin: 13px 0 7px;
+  text-transform: uppercase;
+}
+.theme-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.theme-chip {
+  border-radius: var(--pill);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 4px 10px;
+}
+.theme-positive { background: #dcefe3; color: #14532d; }
+.theme-negative { background: #f7e3da; color: #7c2d12; }
+.theme-mixed { background: #eceff0; color: #3f4a46; }
+.synthesis-list { list-style: none; margin: 0; padding: 0; }
+.synthesis-list li {
+  font-size: 0.9rem;
+  line-height: 1.42;
+  padding: 3px 0 3px 16px;
+  position: relative;
+}
+.synthesis-list li::before { left: 2px; position: absolute; }
+.synthesis-strength::before { color: #1b6b43; content: "+"; font-weight: 700; }
+.synthesis-concern::before { color: #9a3412; content: "−"; font-weight: 700; }
+.synthesis-note { color: var(--muted); font-size: 0.78rem; line-height: 1.4; margin: 12px 0 0; }
+
 /* Preferences */
 .prefs-title {
   font-family: var(--font-display);
@@ -472,3 +543,19 @@ button.entity-card:hover { border-color: var(--border-strong); box-shadow: 0 2px
   margin: 22px 0;
   text-align: center;
 }
+.empty-block { display: grid; justify-items: center; }
+
+.error-state {
+  background: #fdf3ee;
+  border: 1px solid #e8c4b0;
+  border-radius: var(--radius-card);
+  margin: 16px;
+  padding: 14px 15px;
+}
+.error-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 5px;
+}
+.error-body { color: #7c2d12; font-size: 0.9rem; line-height: 1.45; margin: 0; }

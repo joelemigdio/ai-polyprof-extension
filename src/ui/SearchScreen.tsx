@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { CourseOffering, Professor } from "../models/professor";
+import { favoriteId } from "../models/favorites";
 import type { StudentPreferences } from "../models/preferences";
 import { matchProfessor, rankProfessors } from "../services/preference-matching";
 import { recentSearches } from "../services/mock-professor-data-service";
@@ -10,6 +11,8 @@ interface SearchScreenProps {
   courses: CourseOffering[];
   professorsById: Map<string, Professor>;
   preferences: StudentPreferences;
+  favoriteIds: Set<string>;
+  onToggleFavorite: (course: CourseOffering, professor: Professor) => void;
   onSelectCourse: (course: CourseOffering) => void;
   onOpenPreferences: () => void;
 }
@@ -18,6 +21,8 @@ export function SearchScreen({
   courses,
   professorsById,
   preferences,
+  favoriteIds,
+  onToggleFavorite,
   onSelectCourse,
   onOpenPreferences,
 }: SearchScreenProps) {
@@ -110,7 +115,9 @@ export function SearchScreen({
                 course={course}
                 topProfessor={topProfessor}
                 match={matchProfessor(topProfessor, preferences)}
+                isFavorite={favoriteIds.has(favoriteId(course.code, topProfessor.id))}
                 onSelect={onSelectCourse}
+                onToggleFavorite={onToggleFavorite}
               />
             ))}
           </div>

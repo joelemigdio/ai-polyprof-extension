@@ -4,7 +4,7 @@ import type { Professor } from "../models/professor";
 import { createDefaultPreferences } from "../models/preferences";
 import { findConfidentProfessor, normalizeInstructorName } from "./professor-detection";
 import { findCourseCandidates, findCourseRows, findInstructorCandidates, findInstructorDetection } from "./student-center-adapter";
-import { StudentCenterIntegration } from "./student-center-integration";
+import { StudentCenterIntegration, type StudentCenterIntegrationOptions } from "./student-center-integration";
 
 const professor: Professor = {
   id: "fixture-ada",
@@ -988,6 +988,199 @@ describe("Student Center integration fixture", () => {
     expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(1);
     integration.scan();
     expect(document.querySelectorAll("[data-polyratings-hover-target]")).toHaveLength(1);
+    integration.stop();
+  });
+});
+
+describe("saving a class from the hover card", () => {
+  const cartMarkup = `<div aria-label="Classes" role="table"><div aria-label="Enrollment_Classes" role="treegrid"><div role="row"><div role="columnheader" header="Class">Class</div><div role="columnheader" header="Instructor">Instructor</div></div><div role="row" data-row-id="cart-1"><div role="gridcell" header="Class">CSC 4880</div><div role="gridcell" header="Instructor" index="5"><div title="Ada Lovelace"><span aria-hidden="false">Ada Lovelace</span></div></div></div></div></div>`;
+
+  function openCard(options: StudentCenterIntegrationOptions) {
+    document.documentElement.setAttribute("data-polyratings-fixture", "");
+    document.documentElement.id = "hcx-shopping-cart";
+    document.body.innerHTML = cartMarkup;
+    const integration = new StudentCenterIntegration(options);
+    integration.start();
+    const target = document.querySelector<HTMLElement>("[title='Ada Lovelace']")!;
+    target.dispatchEvent(new Event("pointerenter"));
+    vi.advanceTimersByTime(250);
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    return { integration, target, host };
+  }
+
+  it("offers an unsaved class a save action naming the course", () => {
+    vi.useFakeTimers();
+    const { integration, host } = openCard({ document, professors: [professor] });
+
+    const button = host.shadowRoot?.querySelector<HTMLButtonElement>(".favorite")!;
+    expect(button.textContent).toContain("Save CSC 4880");
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+    integration.stop();
+  });
+
+  it("reports the saved favorite with the top-ranked professor attached", () => {
+    vi.useFakeTimers();
+    const saved: Array<{ courseCode: string; professorName: string | null; isSaved: boolean }> = [];
+    const { integration, host } = openCard({
+      document,
+      professors: [professor],
+      onToggleFavorite: (favorite, isSaved) =>
+        saved.push({ courseCode: favorite.courseCode, professorName: favorite.professorName, isSaved }),
+    });
+
+    host.shadowRoot?.querySelector<HTMLButtonElement>(".favorite")!.click();
+
+    expect(saved).toEqual([{ courseCode: "CSC 4880", professorName: "Ada Lovelace", isSaved: true }]);
+    integration.stop();
+  });
+
+  it("flips the control to a saved state without waiting for storage", () => {
+    vi.useFakeTimers();
+    const { integration, host } = openCard({ document, professors: [professor] });
+
+    host.shadowRoot?.querySelector<HTMLButtonElement>(".favorite")!.click();
+
+    const button = host.shadowRoot?.querySelector<HTMLButtonElement>(".favorite")!;
+    expect(button.className).toContain("is-saved");
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+    expect(button.textContent).toContain("Saved");
+    integration.stop();
+  });
+
+  it("renders an already-saved class as saved on first open", () => {
+    vi.useFakeTimers();
+    const { integration, host } = openCard({
+      document,
+      professors: [professor],
+      favorites: [
+        {
+          id: "CSC 4880::fixture-ada",
+          courseCode: "CSC 4880",
+          courseTitle: null,
+          professorId: "fixture-ada",
+          professorName: "Ada Lovelace",
+          starRating: 3.6,
+          clarityRating: 3.4,
+          savedAt: "2026-11-16T00:00:00.000Z",
+        },
+      ],
+    });
+
+    expect(host.shadowRoot?.querySelector(".favorite")?.className).toContain("is-saved");
+    integration.stop();
+  });
+
+  it("removes the favorite when a saved class is toggled off", () => {
+    vi.useFakeTimers();
+    const events: boolean[] = [];
+    const { integration, host } = openCard({
+      document,
+      professors: [professor],
+      favorites: [
+        {
+          id: "CSC 4880::fixture-ada",
+          courseCode: "CSC 4880",
+          courseTitle: null,
+          professorId: "fixture-ada",
+          professorName: "Ada Lovelace",
+          starRating: 3.6,
+          clarityRating: 3.4,
+          savedAt: "2026-11-16T00:00:00.000Z",
+        },
+      ],
+      onToggleFavorite: (_favorite, isSaved) => events.push(isSaved),
+    });
+
+    host.shadowRoot?.querySelector<HTMLButtonElement>(".favorite")!.click();
+
+    expect(events).toEqual([false]);
+    expect(host.shadowRoot?.querySelector(".favorite")?.className).not.toContain("is-saved");
+    integration.stop();
+  });
+
+  it("reflects a favorite saved in the popup while the card is open", () => {
+    vi.useFakeTimers();
+    const { integration, host } = openCard({ document, professors: [professor] });
+
+    integration.updateFavorites([
+      {
+        id: "CSC 4880::fixture-ada",
+        courseCode: "CSC 4880",
+        courseTitle: null,
+        professorId: "fixture-ada",
+        professorName: "Ada Lovelace",
+        starRating: 3.6,
+        clarityRating: 3.4,
+        savedAt: "2026-11-16T00:00:00.000Z",
+      },
+    ]);
+
+    expect(host.shadowRoot?.querySelector(".favorite")?.className).toContain("is-saved");
+    integration.stop();
+  });
+});
+
+describe("hover card keyboard access", () => {
+  const cartMarkup = `<div aria-label="Classes" role="table"><div aria-label="Enrollment_Classes" role="treegrid"><div role="row"><div role="columnheader" header="Class">Class</div><div role="columnheader" header="Instructor">Instructor</div></div><div role="row" data-row-id="cart-1"><div role="gridcell" header="Class">CSC 4880</div><div role="gridcell" header="Instructor" index="5"><div title="Ada Lovelace"><span aria-hidden="false">Ada Lovelace</span></div></div></div></div></div>`;
+
+  function focusOpen() {
+    document.documentElement.id = "hcx-shopping-cart";
+    const integration = setFixture(cartMarkup);
+    const target = document.querySelector<HTMLElement>("[title='Ada Lovelace']")!;
+    target.focus();
+    target.dispatchEvent(new Event("focus"));
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    return { integration, target, host };
+  }
+
+  it("moves focus into the card when Tab is pressed on the row", () => {
+    vi.useFakeTimers();
+    const { integration, host } = focusOpen();
+    expect(host.hidden).toBe(false);
+
+    const event = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    document.dispatchEvent(event);
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(host.shadowRoot?.activeElement).not.toBeNull();
+    integration.stop();
+  });
+
+  it("keeps the card open while focus is inside it", () => {
+    vi.useFakeTimers();
+    const { integration, target, host } = focusOpen();
+
+    const inner = host.shadowRoot?.querySelector<HTMLElement>("button")!;
+    target.dispatchEvent(new FocusEvent("blur", { relatedTarget: host }));
+    host.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+    vi.advanceTimersByTime(200);
+
+    expect(host.hidden).toBe(false);
+    expect(inner).toBeTruthy();
+    integration.stop();
+  });
+
+  it("hides the card when focus leaves it entirely", () => {
+    vi.useFakeTimers();
+    const { integration, target, host } = focusOpen();
+
+    target.dispatchEvent(new FocusEvent("blur", { relatedTarget: document.body }));
+    vi.advanceTimersByTime(200);
+
+    expect(host.hidden).toBe(true);
+    integration.stop();
+  });
+
+  it("returns focus to the row on Escape without reopening the card", () => {
+    vi.useFakeTimers();
+    const { integration, target, host } = focusOpen();
+
+    const inner = host.shadowRoot?.querySelector<HTMLElement>("button")!;
+    inner.focus();
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+
+    expect(host.hidden).toBe(true);
+    expect(document.activeElement).toBe(target);
     integration.stop();
   });
 });
