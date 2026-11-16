@@ -92,11 +92,22 @@ export interface CourseProfessorComparison {
   /** PolyRatings "recognizes student difficulties". */
   supportRating: number | null;
   reviewCount: number | null;
+  /** Deterministic score from saved learning-style preferences and ratings. */
+  preferenceFit: number | null;
+  /** Plain-language explanation of the preference match, when rated. */
+  fitLine: string | null;
+  matchedTraits: TraitKey[];
+  conflictingTraits: TraitKey[];
+  workload: string | null;
+  difficulty: string | null;
+  clarity: string | null;
+  flexibility: string | null;
+  reviewThemes: string[];
   /** Most-cited PolyRatings tags, verbatim. */
   tags: string[];
 }
 
-/** Reserved result contract for the future preference-aware ranking service. */
+/** Result contract for provider-backed professor recommendations. */
 export interface RecommendationResult {
   courseCode: string;
   status: "coming-soon" | "unavailable";
