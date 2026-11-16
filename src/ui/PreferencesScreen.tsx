@@ -1,17 +1,20 @@
 import { useRef, useState } from "react";
 import {
+  classStandingOptions,
   classTimeOptions,
   departmentOptions,
   quickPreferenceKeys,
   traitDefinitions,
   traitLabel,
   traitWeights,
+  type ClassStanding,
   type ClassTime,
   type DepartmentCode,
   type StudentPreferences,
   type TraitKey,
 } from "../models/preferences";
-import { savePreferences } from "../services/preference-storage";
+import { resetPreferences, savePreferences } from "../services/preference-storage";
+import { clearFavorites } from "../services/favorites-storage";
 import { MatchingBanner } from "./MatchingBanner";
 import { MultiSelect } from "./MultiSelect";
 
@@ -57,6 +60,16 @@ export function PreferencesScreen({ preferences, onChange }: PreferencesScreenPr
     }
   }
 
+  async function handleClear() {
+    try {
+      const [defaults] = await Promise.all([resetPreferences(), clearFavorites()]);
+      onChange(defaults);
+      setStatus("Saved preferences and favorited classes were cleared.");
+    } catch {
+      setStatus("Your data could not be cleared. Please try again.");
+    }
+  }
+
   function revealLearningStyles() {
     if (!learningStyleRef.current) return;
     learningStyleRef.current.open = true;
@@ -84,6 +97,27 @@ export function PreferencesScreen({ preferences, onChange }: PreferencesScreenPr
           selected={preferences.departments}
           onChange={(departments) => update({ departments })}
         />
+
+        <div className="field">
+          <label className="section-label" htmlFor="class-standing">Class standing</label>
+          <p className="prefs-hint">
+            Optional. Used only to compare you against reviewers in your year. Leave it unset and
+            recommendations use every reviewer instead.
+          </p>
+          <select
+            className="standing-select"
+            id="class-standing"
+            value={preferences.classStanding ?? ""}
+            onChange={(event) =>
+              update({ classStanding: event.target.value === "" ? null : (event.target.value as ClassStanding) })
+            }
+          >
+            <option value="">Prefer not to say</option>
+            {classStandingOptions.map((standing) => (
+              <option key={standing} value={standing}>{standing}</option>
+            ))}
+          </select>
+        </div>
 
         <MultiSelect<ClassTime>
           label="Class time"
@@ -162,6 +196,17 @@ export function PreferencesScreen({ preferences, onChange }: PreferencesScreenPr
         </button>
         {status ? <p className="save-status" aria-live="polite">{status}</p> : null}
         <p className="prefs-footnote">You can update these anytime from Settings.</p>
+
+        <div className="field danger-zone">
+          <p className="section-label">Your data</p>
+          <p className="prefs-hint">
+            Everything PolyProf stores — your preferences, class standing, and saved classes — lives on this
+            browser only. Nothing is sent anywhere.
+          </p>
+          <button className="button-danger" type="button" onClick={() => void handleClear()}>
+            Clear all my data
+          </button>
+        </div>
       </div>
     </div>
   );

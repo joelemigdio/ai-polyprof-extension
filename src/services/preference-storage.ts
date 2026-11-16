@@ -1,8 +1,10 @@
 import {
+  classStandingOptions,
   classTimeOptions,
   createDefaultPreferences,
   departmentOptions,
   traitDefinitions,
+  type ClassStanding,
   type ClassTime,
   type DepartmentCode,
   type StudentPreferences,
@@ -40,10 +42,16 @@ export function normalizePreferences(value: unknown): StudentPreferences {
   const departments = keepKnown<DepartmentCode>(stored.departments, departmentOptions);
   const classTimes = keepKnown<ClassTime>(stored.classTimes, classTimeOptions.map((option) => option.value));
   const learningStyles = keepKnown<TraitKey>(stored.learningStyles, traitDefinitions.map((trait) => trait.key));
+  const classStanding = classStandingOptions.includes(stored.classStanding as ClassStanding)
+    ? (stored.classStanding as ClassStanding)
+    : null;
 
   return {
     version: 2,
     departments: departments ?? defaults.departments,
+    // Absent stays absent: an unset academic year is a valid, private choice,
+    // so it must never fall back to a default value.
+    classStanding,
     classTimes: classTimes ?? defaults.classTimes,
     learningStyles: learningStyles ?? defaults.learningStyles,
   };

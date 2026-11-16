@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import type { CourseOffering, Professor } from "../models/professor";
 import type { StudentPreferences } from "../models/preferences";
-import { buildRecommendationReason, matchProfessor, rankProfessors } from "../services/preference-matching";
+import { matchProfessor, rankProfessors } from "../services/preference-matching";
+import { buildRecommendationExplanation, describePreferenceFactors } from "../services/recommendation-explanation";
 import { ArrowLeftIcon, CloverIcon } from "./Icons";
 import { ProfessorCard } from "./ProfessorCard";
 import { RatingPills } from "./RatingPills";
@@ -11,12 +12,17 @@ interface ResultsScreenProps {
   professors: Professor[];
   preferences: StudentPreferences;
   onSelectProfessor: (professor: Professor) => void;
+  onCompare: () => void;
   onBack: () => void;
 }
 
-export function ResultsScreen({ course, professors, preferences, onSelectProfessor, onBack }: ResultsScreenProps) {
+export function ResultsScreen({ course, professors, preferences, onSelectProfessor, onCompare, onBack }: ResultsScreenProps) {
   const ranked = useMemo(() => rankProfessors(professors, preferences), [professors, preferences]);
   const recommended = ranked[0];
+  const explanation = useMemo(
+    () => (recommended ? buildRecommendationExplanation(recommended, preferences) : null),
+    [recommended, preferences],
+  );
 
   return (
     <div className="screen">
@@ -47,7 +53,7 @@ export function ResultsScreen({ course, professors, preferences, onSelectProfess
         )}
       </div>
 
-      {recommended ? (
+      {recommended && explanation ? (
         <section className="ai-panel" aria-label="AI recommendation">
           <h2 className="ai-panel-title">
             AI Recommendation
@@ -59,7 +65,16 @@ export function ResultsScreen({ course, professors, preferences, onSelectProfess
             <div className="card-identity">
               <h3>{recommended.name}</h3>
               <p className="ai-pick-meta">{recommended.department} • {recommended.courses.join(", ")}</p>
-              <p className="ai-pick-reason">{buildRecommendationReason(recommended, preferences)}</p>
+              <p className="ai-pick-reason">{explanation.headline}</p>
+              <p className="ai-pick-factors">{describePreferenceFactors(recommended, preferences)}</p>
+              {explanation.caveat ? (
+                <p className="ai-pick-caveat">
+                  <span className={`confidence confidence-${explanation.confidence}`}>
+                    {explanation.confidence} confidence
+                  </span>
+                  {explanation.caveat}
+                </p>
+              ) : null}
             </div>
             <RatingPills starRating={recommended.starRating} clarityRating={recommended.clarityRating} />
           </div>
@@ -68,7 +83,13 @@ export function ResultsScreen({ course, professors, preferences, onSelectProfess
             <button className="button-primary" type="button" onClick={() => onSelectProfessor(recommended)}>
               View Profile
             </button>
-            <button className="button-ghost" type="button" disabled title="Side-by-side comparison is not part of the alpha">
+            <button
+              className="button-ghost"
+              type="button"
+              onClick={onCompare}
+              disabled={ranked.length < 2}
+              title={ranked.length < 2 ? "Only one professor teaches this class" : undefined}
+            >
               Compare
             </button>
           </div>

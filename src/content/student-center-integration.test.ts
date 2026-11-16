@@ -248,7 +248,7 @@ describe("Student Center integration fixture", () => {
     expect(courses[0].source).toBe("shopping-cart");
     expect(courses[0].instructors.map((instructor) => instructor.displayName)).toEqual(["Michael Haungs"]);
 
-    const integration = new StudentCenterIntegration({ document, professors: [professor], useMockData: false });
+    const integration = new StudentCenterIntegration({ document, professors: [professor] });
     integration.start();
     const target = document.querySelector<HTMLElement>("[title='CSC 3710']")!;
     const checkbox = document.querySelector<HTMLInputElement>("#cart-checkbox")!;
@@ -262,7 +262,9 @@ describe("Student Center integration fixture", () => {
     expect(host.shadowRoot?.textContent).toContain("CSC 3710");
     expect(host.shadowRoot?.textContent).toContain("Game Design and Development");
     expect(host.shadowRoot?.textContent).toContain("Michael Haungs");
-    expect(host.shadowRoot?.textContent).toContain("Rating unavailable");
+    // Haungs has no PolyRatings record in this fixture, so the card must say
+    // so rather than borrowing another professor's numbers.
+    expect(host.shadowRoot?.textContent).toContain("No ratings available yet");
     integration.stop();
   });
 
@@ -306,7 +308,7 @@ describe("Student Center integration fixture", () => {
     expect(detection.myScheduleMainRowTargets).toBe(2);
     expect(detection.candidates.map((candidate) => candidate.instructorName)).toEqual(["Dr. Ada Lovelace", "Dr. Grace Hopper"]);
 
-    const integration = new StudentCenterIntegration({ document, professors: [professor], useMockData: true });
+    const integration = new StudentCenterIntegration({ document, professors: [professor] });
     integration.start();
     const targets = document.querySelectorAll<HTMLElement>("[data-polyratings-hover-target]");
     expect([...targets].map((target) => target.textContent)).toEqual(["Dr. Ada Lovelace", "Dr. Grace Hopper"]);
@@ -326,7 +328,7 @@ describe("Student Center integration fixture", () => {
     const detection = findInstructorDetection(document);
     expect(detection.scheduleBuilderTargets).toBe(2);
     expect(detection.candidates.map((candidate) => candidate.instructorName)).toEqual(["Dr. Ada Lovelace", "Dr. Ada Lovelace"]);
-    const integration = new StudentCenterIntegration({ document, professors: [professor], useMockData: true });
+    const integration = new StudentCenterIntegration({ document, professors: [professor] });
     integration.start();
     const targets = document.querySelectorAll<HTMLElement>("[data-polyratings-hover-target]");
     expect(targets).toHaveLength(2);
@@ -394,7 +396,7 @@ describe("Student Center integration fixture", () => {
     ]);
     expect(candidates.every((candidate) => candidate.clickOpensCard === false)).toBe(true);
 
-    const integration = new StudentCenterIntegration({ document, professors: [professor], useMockData: false });
+    const integration = new StudentCenterIntegration({ document, professors: [professor] });
     integration.start();
     const courseCode = document.querySelector<HTMLButtonElement>("#course-code")!;
     const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
@@ -424,25 +426,33 @@ describe("Student Center integration fixture", () => {
     expect(host.shadowRoot?.textContent).toContain("CSC 4880");
     expect(host.shadowRoot?.textContent).toContain("Artificial Intelligence");
     expect(host.shadowRoot?.textContent).toContain("currently visible in Student Center");
-    expect(host.shadowRoot?.textContent).toContain("Personalized recommendations coming soon.");
-    expect(host.shadowRoot?.textContent).toContain("fixture data");
+    // The recommendation now names the professor, the cohort it drew on, and
+    // the sample size, instead of a "coming soon" placeholder.
+    expect(host.shadowRoot?.textContent).toContain("Recommended professor");
+    expect(host.shadowRoot?.textContent).toContain("Ada Lovelace");
+    expect(host.shadowRoot?.textContent).toContain("All reviewers");
+    expect(host.shadowRoot?.textContent).not.toContain("coming soon");
 
     host.shadowRoot?.querySelector<HTMLButtonElement>(".compare")?.click();
-    expect(host.shadowRoot?.textContent).toContain("Professor comparison");
-    expect(host.shadowRoot?.textContent).toContain("Workload: Unavailable");
+    expect(host.shadowRoot?.textContent).toContain("Presents clearly");
+    expect(host.shadowRoot?.textContent).toContain("Recognizes struggles");
+    expect(host.shadowRoot?.textContent).not.toContain("Unavailable");
     integration.stop();
   });
 
-  it("keeps real Student Center course cards in a no-data state and switches cleanly to a professor card", () => {
+  it("shows real ratings on a course card and switches cleanly to a professor card", () => {
     document.body.innerHTML = `<main aria-label="Class Schedule" role="treegrid"><div role="row"><div role="columnheader">Class</div><div role="columnheader">Description</div><div role="columnheader">Instructor</div></div><div role="row" data-row-id="course-1"><div role="gridcell" header="Class">CSC 4880</div><div role="gridcell" header="Description">Artificial Intelligence</div><div role="gridcell" header="Instructor"><span aria-hidden="false">Dr. Ada Lovelace</span></div></div></main>`;
-    const integration = new StudentCenterIntegration({ document, professors: [professor], useMockData: false });
+    const integration = new StudentCenterIntegration({ document, professors: [professor] });
     integration.start();
     const courseTarget = document.querySelector<HTMLElement>("[data-polyratings-course-hover-target]")!;
     const professorTarget = document.querySelector<HTMLElement>("[data-polyratings-hover-target]")!;
     courseTarget.click();
     const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
-    expect(host.shadowRoot?.textContent).toContain("Rating unavailable");
-    expect(host.shadowRoot?.textContent).not.toContain("4.6 overall");
+    // A matched instructor shows their real index values here. This previously
+    // asserted a no-data state, which was the bug rather than the intent.
+    expect(host.shadowRoot?.textContent).toContain("Ada Lovelace");
+    expect(host.shadowRoot?.textContent).toContain("3.60");
+    expect(host.shadowRoot?.textContent).not.toContain("No ratings available yet");
 
     professorTarget.click();
     expect(document.querySelectorAll("#polyratings-hover-host")).toHaveLength(1);
