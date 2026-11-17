@@ -8,7 +8,7 @@ import {
   type Professor,
 } from "../models/professor";
 import { createDefaultPreferences, type StudentPreferences } from "../models/preferences";
-import { favoriteId, type FavoriteClass } from "../models/favorites";
+import { favoriteId, sectionFavoriteId, type FavoriteClass } from "../models/favorites";
 import { courseAliases, courseTitle } from "../data/course-crosswalk";
 import { buildClassSummary, matchProfessor, rankProfessors } from "../services/preference-matching";
 import { synthesizeReviews, type ReviewSynthesis } from "../services/review-synthesis";
@@ -34,6 +34,33 @@ const cardGap = 8;
 const maxCardHeight = 420;
 type CardOpenMode = "hover" | "click" | "focus" | null;
 const maxReviewsShown = 4;
+
+interface VisibleSection {
+  label: string;
+  classNumber: string | null;
+}
+
+/** Adjacent grid cells have no text-node separator, so preserve their boundary. */
+function sectionText(sectionElement: HTMLElement): string {
+  const parts: string[] = [];
+  const walker = sectionElement.ownerDocument.createTreeWalker(sectionElement, NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) parts.push(walker.currentNode.textContent ?? "");
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The portal labels an offered section as S01-LEC (6155), S02-LAB, etc. Read
+ * that small, stable identifier only from the already verified section row so
+ * a room or an unrelated course number cannot become a saved section.
+ */
+function visibleSection(sectionElement: HTMLElement): VisibleSection | null {
+  const text = sectionText(sectionElement);
+  const match = text.match(/\b([A-Z]?\d{2,3}-(?:LEC|LAB|ACT|DIS|SEM|TUT|SUP|CLN|IND|REC))\*?\s*(?:\((\d{3,})\))?/i);
+  if (!match) return null;
+  const section = match[1].toUpperCase();
+  const classNumber = match[2] ?? null;
+  return { label: classNumber ? `${section} (${classNumber})` : section, classNumber };
+}
 
 /** Supplies review text for one professor; the index alone carries only scores. */
 export interface ProfessorDetailSource {
@@ -692,6 +719,8 @@ export class StudentCenterIntegration {
 
     const favoriteToggle = this.renderFavoriteToggle(resolved, card, showClose);
     if (favoriteToggle) body.append(favoriteToggle);
+    const sectionFavoriteToggle = this.renderSectionFavoriteToggle(resolved, card, showClose);
+    if (sectionFavoriteToggle) body.append(sectionFavoriteToggle);
 
     body.append(this.renderSummary(resolved.rated, resolved.aliases));
     card.append(body);
@@ -733,6 +762,56 @@ export class StudentCenterIntegration {
           courseTitle: courseTitle(courseCode) ?? null,
           professorId: top?.id ?? null,
           professorName: top?.name ?? null,
+          starRating: top?.starRating ?? null,
+          clarityRating: top?.clarityRating ?? null,
+          savedAt: new Date().toISOString(),
+        },
+        !isSaved,
+      );
+      this.renderList(card, resolved, showClose);
+    });
+    return button;
+  }
+
+  /** Saves the exact Student Center section when its rendered label is known. */
+  private renderSectionFavoriteToggle(
+    resolved: ResolvedRow,
+    card: HTMLElement,
+    showClose: boolean,
+  ): HTMLElement | null {
+    const courseCode = resolved.row.courseCode;
+    const section = visibleSection(resolved.row.sectionElement);
+    if (!courseCode || !section) return null;
+
+    const top = resolved.rated[0] ?? null;
+    const id = sectionFavoriteId(courseCode, section.label);
+    const isSaved = this.favoriteIds.has(id);
+    const button = this.element(
+      "button",
+      isSaved ? "favorite favorite-section is-saved" : "favorite favorite-section",
+      isSaved ? `★ Saved section — ${section.label}` : `☆ Save section ${section.label}`,
+    ) as HTMLButtonElement;
+    button.type = "button";
+    button.setAttribute("aria-pressed", String(isSaved));
+    button.setAttribute(
+      "aria-label",
+      isSaved ? `Remove ${courseCode} ${section.label} from favorites` : `Save ${courseCode} ${section.label} to favorites`,
+    );
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.retainCardForInteraction();
+      if (isSaved) this.favoriteIds.delete(id);
+      else this.favoriteIds.add(id);
+      this.options.onToggleFavorite?.(
+        {
+          id,
+          kind: "section",
+          courseCode,
+          courseTitle: courseTitle(courseCode) ?? null,
+          professorId: top?.id ?? null,
+          professorName: top?.name ?? null,
+          sectionLabel: section.label,
+          classNumber: section.classNumber,
           starRating: top?.starRating ?? null,
           clarityRating: top?.clarityRating ?? null,
           savedAt: new Date().toISOString(),

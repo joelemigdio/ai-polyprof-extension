@@ -342,8 +342,6 @@ const mockCourses: CourseOffering[] = [
   },
 ];
 
-export const recentSearches: ReadonlyArray<string> = ["Franz Kurfess", "CPE 315", "CSC 480"];
-
 export const mockProfessorDataService: ProfessorDataService = {
   async getProfessorResults(): Promise<Professor[]> {
     return mockProfessors;

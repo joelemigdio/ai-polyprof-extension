@@ -1,4 +1,4 @@
-import { favoriteId, type FavoriteClass } from "../models/favorites";
+import { favoriteId, sectionFavoriteId, type FavoriteClass } from "../models/favorites";
 
 const storageKey = "favoriteClasses";
 
@@ -53,16 +53,25 @@ export function normalizeFavorites(value: unknown): FavoriteClass[] {
     if (!courseCode) continue;
 
     const professorId = optionalString(stored.professorId);
-    const id = optionalString(stored.id) ?? favoriteId(courseCode, professorId);
+    const sectionLabel = optionalString(stored.sectionLabel);
+    // Favorites created before sections existed have no kind, and remain
+    // course favorites. A malformed section safely falls back to that shape.
+    const kind = stored.kind === "section" && sectionLabel ? "section" : "course";
+    const id = optionalString(stored.id) ?? (kind === "section"
+      ? sectionFavoriteId(courseCode, sectionLabel!)
+      : favoriteId(courseCode, professorId));
     if (seen.has(id)) continue;
     seen.add(id);
 
     favorites.push({
       id,
+      kind,
       courseCode,
       courseTitle: optionalString(stored.courseTitle),
       professorId,
       professorName: optionalString(stored.professorName),
+      sectionLabel: kind === "section" ? sectionLabel : null,
+      classNumber: kind === "section" ? optionalString(stored.classNumber) : null,
       starRating: optionalRating(stored.starRating),
       clarityRating: optionalRating(stored.clarityRating),
       savedAt: optionalString(stored.savedAt) ?? new Date(0).toISOString(),

@@ -3,9 +3,8 @@ import type { CourseOffering, Professor } from "../models/professor";
 import { favoriteId } from "../models/favorites";
 import type { StudentPreferences } from "../models/preferences";
 import { matchProfessor, rankProfessors } from "../services/preference-matching";
-import { recentSearches } from "../services/mock-professor-data-service";
 import { ClassCard } from "./ClassCard";
-import { BulbIcon, ChevronDownIcon, ClearIcon, ClockIcon, SearchIcon, SparkleIcon } from "./Icons";
+import { ChevronDownIcon, ClearIcon, SearchIcon } from "./Icons";
 
 interface SearchScreenProps {
   courses: CourseOffering[];
@@ -27,6 +26,7 @@ export function SearchScreen({
   onOpenPreferences,
 }: SearchScreenProps) {
   const [query, setQuery] = useState("");
+  const isSearching = query.trim().length > 0;
 
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -86,60 +86,47 @@ export function SearchScreen({
           Term: Winter '26
           <ChevronDownIcon size={15} />
         </button>
-        <button className="link-button" type="button" onClick={() => setQuery("")}>Clear</button>
+        {isSearching ? (
+          <button className="link-button" type="button" onClick={() => setQuery("")}>Clear</button>
+        ) : null}
       </div>
 
       <div className="scroll-area">
-        <p className="section-label">Recent searches</p>
-        <div className="recent-list">
-          {recentSearches.map((term) => (
-            <button className="recent-chip" type="button" key={term} onClick={() => setQuery(term)}>
-              <ClockIcon size={15} />
-              {term}
-            </button>
-          ))}
-        </div>
+        {isSearching ? (
+          <>
+            <div className="section-head">
+              <p className="section-label">Search results</p>
+              <span className="section-count">{matches.length} {matches.length === 1 ? "match" : "matches"}</span>
+            </div>
 
-        <div className="section-head">
-          <p className="section-label">Suggested classes</p>
-          <span className="section-count">{matches.length} {matches.length === 1 ? "match" : "matches"}</span>
-        </div>
-
-        {matches.length === 0 ? (
-          <p className="empty-state">No classes match this search in your selected departments.</p>
+            {matches.length === 0 ? (
+              <p className="empty-state">No classes match this search in your selected departments.</p>
+            ) : (
+              <div className="card-list">
+                {matches.map(({ course, topProfessor }) => (
+                  <ClassCard
+                    key={course.code}
+                    course={course}
+                    topProfessor={topProfessor}
+                    match={matchProfessor(topProfessor, preferences)}
+                    isFavorite={favoriteIds.has(favoriteId(course.code, topProfessor.id))}
+                    onSelect={onSelectCourse}
+                    onToggleFavorite={onToggleFavorite}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         ) : (
-          <div className="card-list">
-            {matches.map(({ course, topProfessor }) => (
-              <ClassCard
-                key={course.code}
-                course={course}
-                topProfessor={topProfessor}
-                match={matchProfessor(topProfessor, preferences)}
-                isFavorite={favoriteIds.has(favoriteId(course.code, topProfessor.id))}
-                onSelect={onSelectCourse}
-                onToggleFavorite={onToggleFavorite}
-              />
-            ))}
-          </div>
+          <section className="search-home" aria-labelledby="search-home-heading">
+            <SearchIcon size={24} />
+            <h2 id="search-home-heading">Find a class or professor</h2>
+            <p>
+              Search by course code, course title, or professor name. Results are ranked using your saved preferences.
+            </p>
+          </section>
         )}
       </div>
-
-      <section className="smart-footer" aria-label="AI smart search helper">
-        <div className="smart-footer-head">
-          <h2 className="smart-footer-title">
-            AI Smart Search Helper
-            <SparkleIcon size={15} />
-          </h2>
-          <button className="link-button" type="button" onClick={onOpenPreferences}>Configure Criteria</button>
-        </div>
-        <p className="smart-tip">
-          <BulbIcon size={15} />
-          <span>
-            Try typing <strong>"Project-heavy"</strong> or "Clear Grading" directly into search to filter by your
-            preferred learning style!
-          </span>
-        </p>
-      </section>
     </div>
   );
 }

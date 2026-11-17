@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { favoriteId, type FavoriteClass } from "../models/favorites";
+import { favoriteId, sectionFavoriteId, type FavoriteClass } from "../models/favorites";
 import { addFavorite, clearFavorites, loadFavorites, normalizeFavorites, removeFavorite } from "./favorites-storage";
 
 function fakeStorage(): Record<string, unknown> {
@@ -83,6 +83,24 @@ describe("favorites storage", () => {
 
     expect(await loadFavorites()).toHaveLength(2);
   });
+
+  it("keeps a saved section distinct from a course favorite", async () => {
+    await addFavorite(favorite());
+    await addFavorite(favorite({
+      id: sectionFavoriteId("CSC 3100", "S01-LEC (6155)"),
+      kind: "section",
+      sectionLabel: "S01-LEC (6155)",
+      classNumber: "6155",
+    }));
+
+    const loaded = await loadFavorites();
+    expect(loaded).toHaveLength(2);
+    expect(loaded[0]).toMatchObject({
+      kind: "section",
+      sectionLabel: "S01-LEC (6155)",
+      classNumber: "6155",
+    });
+  });
 });
 
 describe("normalizeFavorites", () => {
@@ -104,6 +122,22 @@ describe("normalizeFavorites", () => {
     const result = normalizeFavorites([{ courseCode: "CSC 3100", professorId: "ada" }]);
 
     expect(result[0].id).toBe(favoriteId("CSC 3100", "ada"));
+  });
+
+  it("rebuilds a missing section id and preserves its snapshot", () => {
+    const result = normalizeFavorites([{
+      kind: "section",
+      courseCode: "CSC 3100",
+      sectionLabel: "S01-LEC (6155)",
+      classNumber: "6155",
+    }]);
+
+    expect(result[0]).toMatchObject({
+      id: sectionFavoriteId("CSC 3100", "S01-LEC (6155)"),
+      kind: "section",
+      sectionLabel: "S01-LEC (6155)",
+      classNumber: "6155",
+    });
   });
 
   it("coerces malformed ratings to null instead of NaN", () => {
