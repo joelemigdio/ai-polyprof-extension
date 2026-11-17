@@ -9,3 +9,4 @@ dist/
 *.key
 *.p12
 secrets/
+coverage/

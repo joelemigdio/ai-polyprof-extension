@@ -11,6 +11,7 @@
     "build:icons": "node scripts/build-icons.mjs",
     "package": "npm run build && rm -f polyprof-$npm_package_version.zip && cd dist && zip -r ../polyprof-$npm_package_version.zip . -x '.*'",
     "test": "npm run typecheck && vitest run",
+    "test:coverage": "vitest run --coverage --coverage.reporter=text --coverage.include='src/**'",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },
@@ -24,8 +25,9 @@
     "@types/chrome": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
+    "@vitest/coverage-v8": "^5.1.0",
     "jsdom": "latest",
-    "typescript": "latest"
-    ,"vitest": "latest"
+    "typescript": "latest",
+    "vitest": "latest"
   }
 }

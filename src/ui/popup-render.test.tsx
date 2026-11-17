@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Professor } from "../models/professor";
 import { createDefaultPreferences } from "../models/preferences";
+import { ComparisonScreen } from "./ComparisonScreen";
 import { DetailScreen } from "./DetailScreen";
 import { DashboardScreen } from "./DashboardScreen";
+import { ResultsScreen } from "./ResultsScreen";
 import { FavoritesScreen } from "./FavoritesScreen";
 import { SearchScreen } from "./SearchScreen";
 
@@ -219,5 +221,150 @@ describe("DashboardScreen", () => {
     expect(markup).toContain("CSC 4880");
     expect(markup).toContain("Section S01-LEC (6155) • Ada Lovelace");
     expect(markup).toContain("View all");
+  });
+});
+
+describe("ResultsScreen recommendation panel", () => {
+  const course = {
+    code: "CSC 357",
+    title: "Computer Systems",
+    department: "CSC",
+    term: "Winter '26",
+    professorIds: ["ada", "grace"],
+  };
+  const grace: Professor = {
+    ...professor,
+    id: "grace",
+    name: "Grace Hopper",
+    firstName: "Grace",
+    lastName: "Hopper",
+    starRating: 3.1,
+    clarityRating: 2.9,
+    supportRating: 3.4,
+    reviewCount: 2,
+    tags: ["Tough Grader"],
+    traits: [],
+    reviews: [],
+  };
+
+  function render(preferences = createDefaultPreferences()) {
+    return renderToStaticMarkup(
+      <ResultsScreen
+        course={course}
+        professors={[professor, grace]}
+        preferences={preferences}
+        onSelectProfessor={() => {}}
+        onCompare={() => {}}
+        onBack={() => {}}
+      />,
+    );
+  }
+
+  it("names the cohort, the rating, and the sample size", () => {
+    const markup = render({ ...createDefaultPreferences(), classStanding: "Senior" });
+
+    expect(markup).toContain("reviews");
+    expect(markup).toMatch(/rated .* out of 4/);
+  });
+
+  it("states the preference factors that were applied", () => {
+    expect(render()).toContain("Matches");
+  });
+
+  it("shows a confidence badge when the evidence is caveated", () => {
+    expect(render()).toContain("confidence");
+  });
+
+  it("prompts for a class standing when none is set", () => {
+    expect(render()).toContain("class standing");
+  });
+
+  it("does not prompt for a class standing once one is set", () => {
+    const markup = render({ ...createDefaultPreferences(), classStanding: "Senior" });
+
+    expect(markup).not.toContain("Add your class standing");
+  });
+
+  it("offers Compare when more than one professor teaches the class", () => {
+    expect(render()).toContain("Compare");
+    expect(render()).not.toContain("disabled");
+  });
+
+  it("disables Compare when only one professor teaches the class", () => {
+    const markup = renderToStaticMarkup(
+      <ResultsScreen
+        course={course}
+        professors={[professor]}
+        preferences={createDefaultPreferences()}
+        onSelectProfessor={() => {}}
+        onCompare={() => {}}
+        onBack={() => {}}
+      />,
+    );
+
+    expect(markup).toContain("disabled");
+  });
+});
+
+describe("ComparisonScreen", () => {
+  const course = {
+    code: "CSC 357",
+    title: "Computer Systems",
+    department: "CSC",
+    term: "Winter '26",
+    professorIds: ["ada", "grace"],
+  };
+  const grace: Professor = {
+    ...professor,
+    id: "grace",
+    name: "Grace Hopper",
+    starRating: 3.9,
+    clarityRating: 2.9,
+    supportRating: 3.9,
+    reviewCount: 2,
+    tags: ["Tough Grader"],
+    reviews: [],
+  };
+
+  const markup = renderToStaticMarkup(
+    <ComparisonScreen course={course} professors={[professor, grace]} onBack={() => {}} />,
+  );
+
+  it("compares on the metrics PolyRatings actually measures", () => {
+    expect(markup).toContain("Overall");
+    expect(markup).toContain("Presents clearly");
+    expect(markup).toContain("Recognizes struggles");
+  });
+
+  it("never labels the support score as difficulty", () => {
+    expect(markup).not.toContain("Difficulty");
+    expect(markup).toContain("not how hard the course is");
+  });
+
+  it("shows every compared professor with their review count", () => {
+    expect(markup).toContain("Ada Lovelace");
+    expect(markup).toContain("Grace Hopper");
+    expect(markup).toContain("4 reviews");
+    expect(markup).toContain("2 reviews");
+  });
+
+  it("marks the leader on a metric the professors differ on", () => {
+    expect(markup).toContain("is-leader");
+  });
+
+  it("marks no leader when only one professor is compared", () => {
+    const single = renderToStaticMarkup(
+      <ComparisonScreen course={course} professors={[professor]} onBack={() => {}} />,
+    );
+
+    expect(single).not.toContain("is-leader");
+  });
+
+  it("handles a class with no professor data", () => {
+    const empty = renderToStaticMarkup(
+      <ComparisonScreen course={course} professors={[]} onBack={() => {}} />,
+    );
+
+    expect(empty).toContain("No professor information is available");
   });
 });

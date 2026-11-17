@@ -102,6 +102,17 @@ node scripts/build-course-crosswalk.mjs csc cpe   # one or more departments
 
 The script asserts a set of hand-verified pairs on every run and fails loudly if the catalog's markup or wording changes. It currently yields 3,579 mappings plus 4,356 course titles, covering 88% of CSC reviews posted since 2024. Unmapped courses fall back to the professor's overall rating rather than showing nothing.
 
+## Tests
+
+204 tests across 12 files, run with `npm test` (which type-checks first). `npm run test:coverage` reports **82% line coverage across all of `src/`**.
+
+Coverage is deliberately uneven, and the shape is the point:
+
+- **Decision logic is near-fully covered**, because it is what the product's claims rest on: `review-synthesis` 98%, `recommendation-explanation` 100%, `peer-cohort` 100%, `polyratings-api` 100%, `preference-matching` 94%, `course-professor-comparison` 90%.
+- **The content script is covered at 92%**, including the 951-line Student Center adapter at 97%. That adapter is the most brittle code in the project, since it reads markup the project does not control.
+- **React screens are covered by render assertions, not interaction tests.** `ComparisonScreen` and `DetailScreen` are at 100%, `ResultsScreen` 86%; `App`, `SearchScreen`, and `PreferencesScreen` are uncovered, so screen wiring and event handlers are verified by hand in a browser rather than by the suite.
+- **I/O boundaries are intentionally uncovered**: the MV3 service worker, `content-script.ts` bootstrap, and `polyratings-data-service` are thin adapters over `chrome.*` and `fetch`. The pure logic they call is tested directly instead.
+
 ## Prerequisites
 
 - Node.js 20 or newer
@@ -156,3 +167,4 @@ See [the repository review](docs/POLYRATINGS_REPOSITORY_REVIEW.md). The referenc
 | `npm run build:icons` | Regenerate the toolbar icons in `public/icons`. |
 | `npm run build:crosswalk` | Rebuild the quarter-to-semester course crosswalk from the catalog. |
 | `npm test` | Type-check, then run the test suite. |
+| `npm run test:coverage` | Run the suite with line/branch coverage across all of `src/`. |
