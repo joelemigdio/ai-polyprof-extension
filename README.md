@@ -85,7 +85,7 @@ public/
 └── manifest.json # Manifest V3 configuration
 ```
 
-The `ProfessorDataService` interface is the seam between the UI and a data source. `polyratingsDataService` implements it against the live API; `mockProfessorDataService` still backs the popup.
+The `ProfessorDataService` interface is the seam between the UI and a data source. `polyratingsDataService` implements it against the live API and backs both the popup and in-page hover cards. `mockProfessorDataService` remains available for isolated development fixtures.
 
 ### How real data is fetched
 

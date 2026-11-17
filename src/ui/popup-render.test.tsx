@@ -4,7 +4,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { Professor } from "../models/professor";
 import { createDefaultPreferences } from "../models/preferences";
 import { DetailScreen } from "./DetailScreen";
+import { DashboardScreen } from "./DashboardScreen";
 import { FavoritesScreen } from "./FavoritesScreen";
+import { SearchScreen } from "./SearchScreen";
 
 const professor: Professor = {
   id: "ada",
@@ -75,11 +77,11 @@ describe("DetailScreen", () => {
 describe("FavoritesScreen", () => {
   it("invites the student to save something when the list is empty", () => {
     const markup = renderToStaticMarkup(
-      <FavoritesScreen favorites={[]} onRemove={() => {}} onOpenCourse={() => {}} onBrowse={() => {}} />,
+      <FavoritesScreen favorites={[]} onRemove={() => {}} onOpenCourse={() => {}} onBackHome={() => {}} />,
     );
 
-    expect(markup).toContain("have not saved any classes yet");
-    expect(markup).toContain("Browse classes");
+    expect(markup).toContain("have not saved a course or section yet");
+    expect(markup).toContain("Back to home");
   });
 
   it("lists a saved class with its ratings and a remove control", () => {
@@ -99,7 +101,7 @@ describe("FavoritesScreen", () => {
         ]}
         onRemove={() => {}}
         onOpenCourse={() => {}}
-        onBrowse={() => {}}
+        onBackHome={() => {}}
       />,
     );
 
@@ -126,11 +128,96 @@ describe("FavoritesScreen", () => {
         ]}
         onRemove={() => {}}
         onOpenCourse={() => {}}
-        onBrowse={() => {}}
+        onBackHome={() => {}}
       />,
     );
 
     expect(markup).toContain("CSC 2050");
     expect(markup).toContain("Saved from the Student Center");
+  });
+
+  it("labels an exact saved section alongside its instructor", () => {
+    const markup = renderToStaticMarkup(
+      <FavoritesScreen
+        favorites={[{
+          id: "CSC 4880::section::S01-LEC (6155)",
+          kind: "section",
+          courseCode: "CSC 4880",
+          courseTitle: "Artificial Intelligence",
+          sectionLabel: "S01-LEC (6155)",
+          classNumber: "6155",
+          professorId: "ada",
+          professorName: "Ada Lovelace",
+          starRating: 3.6,
+          clarityRating: 3.4,
+          savedAt: "2026-11-16T00:00:00.000Z",
+        }]}
+        onRemove={() => {}}
+        onOpenCourse={() => {}}
+        onBackHome={() => {}}
+      />,
+    );
+
+    expect(markup).toContain("Section S01-LEC (6155)");
+    expect(markup).toContain('class="fit-line">Section S01-LEC (6155)');
+    expect(markup).toContain("Professor: Ada Lovelace");
+    expect(markup).toContain("Remove CSC 4880 S01-LEC (6155) from favorites");
+  });
+});
+
+describe("SearchScreen", () => {
+  it("keeps the opening view focused on starting a search", () => {
+    const markup = renderToStaticMarkup(
+      <SearchScreen
+        courses={[{
+          code: "CSC 4880",
+          title: "Artificial Intelligence",
+          department: "CSC",
+          term: "Winter '26",
+          professorIds: [professor.id],
+        }]}
+        professorsById={new Map([[professor.id, professor]])}
+        preferences={createDefaultPreferences()}
+        favoriteIds={new Set()}
+        onToggleFavorite={() => {}}
+        onSelectCourse={() => {}}
+        onOpenPreferences={() => {}}
+      />,
+    );
+
+    expect(markup).toContain("Find a class or professor");
+    expect(markup).not.toContain("Suggested classes");
+    expect(markup).not.toContain("Search results");
+    expect(markup).not.toContain("Artificial Intelligence");
+    expect(markup).not.toContain("Franz Kurfess");
+  });
+});
+
+describe("DashboardScreen", () => {
+  it("keeps discovery in Student Center and previews saved sections", () => {
+    const markup = renderToStaticMarkup(
+      <DashboardScreen
+        favorites={[{
+          id: "CSC 4880::section::S01-LEC (6155)",
+          kind: "section",
+          courseCode: "CSC 4880",
+          courseTitle: "Artificial Intelligence",
+          sectionLabel: "S01-LEC (6155)",
+          classNumber: "6155",
+          professorId: "ada",
+          professorName: "Ada Lovelace",
+          starRating: 3.6,
+          clarityRating: 3.4,
+          savedAt: "2026-11-16T00:00:00.000Z",
+        }]}
+        onOpenFavorites={() => {}}
+      />,
+    );
+
+    expect(markup).toContain("Compare professors where you register.");
+    expect(markup).toContain("Student Center");
+    expect(markup).toContain("CSC 4880");
+    expect(markup).toContain("Section S01-LEC (6155) • Ada Lovelace");
+    expect(markup).toContain("View all");
   });
 });

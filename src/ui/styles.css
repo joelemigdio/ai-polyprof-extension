@@ -217,6 +217,88 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
   padding: 8px 13px;
 }
 .recent-chip:hover { background: var(--green-100); }
+.search-home {
+  align-items: center;
+  background: var(--card);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-card);
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  padding: 28px 22px;
+  text-align: center;
+}
+.search-home .icon { color: var(--green-900); margin-bottom: 10px; }
+.search-home h2 {
+  color: var(--green-900);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  margin: 0;
+}
+.search-home p { font-size: 0.84rem; line-height: 1.45; margin: 7px 0 0; }
+
+/* Popup home: Student Center supplies the real course catalog. */
+.dashboard-scroll { display: grid; align-content: start; gap: 18px; }
+.dashboard-intro {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 17px;
+}
+.dashboard-kicker {
+  align-items: center;
+  color: var(--green-700);
+  display: flex;
+  font-size: 0.72rem;
+  font-weight: 700;
+  gap: 6px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dashboard-intro h1 {
+  color: var(--green-900);
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  margin: 8px 0 0;
+}
+.dashboard-intro p { color: var(--muted); font-size: 0.84rem; line-height: 1.45; margin: 7px 0 0; }
+.dashboard-favorites .section-head { margin-bottom: 9px; }
+.dashboard-favorite-list { display: grid; gap: 8px; }
+.dashboard-favorite {
+  align-items: flex-start;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  color: var(--green-900);
+  display: flex;
+  gap: 10px;
+  padding: 11px;
+  text-align: left;
+  width: 100%;
+}
+.dashboard-favorite:hover { background: var(--green-100); border-color: var(--border-strong); }
+.dashboard-favorite > .icon { color: var(--amber); flex-shrink: 0; margin-top: 1px; }
+.dashboard-favorite > span { min-width: 0; }
+.dashboard-favorite strong { display: block; font-family: var(--font-display); font-size: 0.92rem; }
+.dashboard-favorite small { color: var(--muted); display: block; font-size: 0.78rem; line-height: 1.35; margin-top: 2px; }
+.dashboard-empty {
+  align-items: center;
+  background: var(--card);
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-card);
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  text-align: center;
+}
+.dashboard-empty .icon { color: var(--amber); }
+.dashboard-empty p { color: var(--green-900); font-weight: 700; margin: 8px 0 3px; }
+.dashboard-empty span { font-size: 0.8rem; line-height: 1.4; }
 
 /* Cards */
 /* minmax(0, 1fr) stops the nowrap subtitle from widening the track past the popup. */
@@ -283,6 +365,13 @@ button.entity-card:hover { border-color: var(--border-strong); box-shadow: 0 2px
   margin: 0;
 }
 .fit-line .icon { flex-shrink: 0; margin-top: 1px; }
+.favorite-section-instructor {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  margin: 3px 32px 0 0;
+  overflow-wrap: anywhere;
+}
 
 /* Rating pills */
 .rating-pills { display: flex; flex-shrink: 0; gap: 6px; }

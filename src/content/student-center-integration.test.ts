@@ -1189,6 +1189,44 @@ describe("saving a class from the hover card", () => {
     expect(host.shadowRoot?.querySelector(".favorite")?.className).toContain("is-saved");
     integration.stop();
   });
+
+  it("saves an exact visible section without replacing the course favorite", () => {
+    vi.useFakeTimers();
+    document.documentElement.setAttribute("data-polyratings-fixture", "");
+    document.body.innerHTML = `<div aria-label="Section List" role="group"><li><h3>CSC 4880 - Artificial Intelligence</h3><p>S01-LEC (6155)</p><dl><dt>Instructor</dt><dd><span class="prof-name" data-name="Ada Lovelace">Ada Lovelace</span></dd></dl></li></div>`;
+    const saves: Array<{ kind?: string; courseCode: string; sectionLabel?: string | null; classNumber?: string | null; isSaved: boolean }> = [];
+    const integration = new StudentCenterIntegration({
+      document,
+      professors: [professor],
+      onToggleFavorite: (favorite, isSaved) => saves.push({
+        kind: favorite.kind,
+        courseCode: favorite.courseCode,
+        sectionLabel: favorite.sectionLabel,
+        classNumber: favorite.classNumber,
+        isSaved,
+      }),
+    });
+    integration.start();
+
+    document.querySelector<HTMLElement>("[data-polyratings-hover-target]")!.click();
+    const host = document.querySelector<HTMLElement>("#polyratings-hover-host")!;
+    const sectionButton = host.shadowRoot?.querySelector<HTMLButtonElement>(".favorite-section")!;
+
+    expect(sectionButton).not.toBeNull();
+    expect(sectionButton.textContent).toContain("Save section S01-LEC (6155)");
+    sectionButton.click();
+
+    expect(saves).toEqual([{
+      kind: "section",
+      courseCode: "CSC 4880",
+      sectionLabel: "S01-LEC (6155)",
+      classNumber: "6155",
+      isSaved: true,
+    }]);
+    expect(host.hidden).toBe(false);
+    expect(host.shadowRoot?.querySelector(".favorite-section")?.className).toContain("is-saved");
+    integration.stop();
+  });
 });
 
 describe("hover card keyboard access", () => {

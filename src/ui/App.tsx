@@ -1,20 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { CourseOffering, Professor } from "../models/professor";
-import { favoriteId, type FavoriteClass } from "../models/favorites";
+import type { FavoriteClass } from "../models/favorites";
 import { createDefaultPreferences, traitLabel, type StudentPreferences } from "../models/preferences";
-import { mockProfessorDataService } from "../services/mock-professor-data-service";
-import { addFavorite, loadFavorites, removeFavorite } from "../services/favorites-storage";
+import { polyratingsDataService } from "../services/polyratings-data-service";
+import { loadFavorites, removeFavorite } from "../services/favorites-storage";
 import { loadPreferences } from "../services/preference-storage";
 import { AppHeader } from "./AppHeader";
 import { ComparisonScreen } from "./ComparisonScreen";
+import { DashboardScreen } from "./DashboardScreen";
 import { DetailScreen } from "./DetailScreen";
 import { FavoritesScreen } from "./FavoritesScreen";
 import { MatchingBanner } from "./MatchingBanner";
 import { PreferencesScreen } from "./PreferencesScreen";
 import { ResultsScreen } from "./ResultsScreen";
-import { SearchScreen } from "./SearchScreen";
 
-type View = "search" | "results" | "detail" | "preferences" | "favorites" | "compare";
+type View = "home" | "results" | "detail" | "preferences" | "favorites" | "compare";
 
 export function App() {
   const [professors, setProfessors] = useState<Professor[]>([]);
@@ -23,14 +23,14 @@ export function App() {
   const [favorites, setFavorites] = useState<FavoriteClass[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [view, setView] = useState<View>("search");
+  const [view, setView] = useState<View>("home");
   const [selectedCourse, setSelectedCourse] = useState<CourseOffering | null>(null);
   const [selectedProfessor, setSelectedProfessor] = useState<Professor | null>(null);
 
   useEffect(() => {
     void Promise.all([
-      mockProfessorDataService.getProfessorResults(),
-      mockProfessorDataService.getCourseOfferings(),
+      polyratingsDataService.getProfessorResults(),
+      polyratingsDataService.getCourseOfferings(),
       loadPreferences().catch(() => createDefaultPreferences()),
       loadFavorites().catch(() => [] as FavoriteClass[]),
     ])
@@ -52,31 +52,12 @@ export function App() {
     [professors],
   );
 
-  const favoriteIds = useMemo(() => new Set(favorites.map((favorite) => favorite.id)), [favorites]);
-
   const courseProfessors = useMemo(() => {
     if (!selectedCourse) return [];
     return selectedCourse.professorIds
       .map((id) => professorsById.get(id))
       .filter((professor): professor is Professor => Boolean(professor));
   }, [professorsById, selectedCourse]);
-
-  const toggleFavorite = useCallback(async (course: CourseOffering, professor: Professor) => {
-    const id = favoriteId(course.code, professor.id);
-    const next = favoriteIds.has(id)
-      ? await removeFavorite(id)
-      : await addFavorite({
-          id,
-          courseCode: course.code,
-          courseTitle: course.title,
-          professorId: professor.id,
-          professorName: professor.name,
-          starRating: professor.starRating,
-          clarityRating: professor.clarityRating,
-          savedAt: new Date().toISOString(),
-        });
-    setFavorites(next);
-  }, [favoriteIds]);
 
   const openCourseByCode = useCallback((courseCode: string) => {
     const course = courses.find((entry) => entry.code === courseCode);
@@ -95,8 +76,8 @@ export function App() {
         isPreferencesOpen={view === "preferences"}
         isFavoritesOpen={view === "favorites"}
         favoritesCount={favorites.length}
-        onToggle={() => setView(view === "preferences" ? "search" : "preferences")}
-        onToggleFavorites={() => setView(view === "favorites" ? "search" : "favorites")}
+        onToggle={() => setView(view === "preferences" ? "home" : "preferences")}
+        onToggleFavorites={() => setView(view === "favorites" ? "home" : "favorites")}
       />
 
       {isLoading ? <p className="empty-state">Loading…</p> : null}
@@ -108,21 +89,10 @@ export function App() {
         </div>
       ) : null}
 
-      {!isLoading && !loadError && view === "search" ? (
+      {!isLoading && !loadError && view === "home" ? (
         <>
           <MatchingBanner summary={matchingSummary} onEdit={() => setView("preferences")} />
-          <SearchScreen
-            courses={courses}
-            professorsById={professorsById}
-            preferences={preferences}
-            favoriteIds={favoriteIds}
-            onToggleFavorite={toggleFavorite}
-            onSelectCourse={(course) => {
-              setSelectedCourse(course);
-              setView("results");
-            }}
-            onOpenPreferences={() => setView("preferences")}
-          />
+          <DashboardScreen favorites={favorites} onOpenFavorites={() => setView("favorites")} />
         </>
       ) : null}
 
@@ -136,7 +106,7 @@ export function App() {
             setView("detail");
           }}
           onCompare={() => setView("compare")}
-          onBack={() => setView("search")}
+          onBack={() => setView("home")}
         />
       ) : null}
 
@@ -144,7 +114,7 @@ export function App() {
         <DetailScreen
           professor={selectedProfessor}
           preferences={preferences}
-          onBack={() => setView(selectedCourse ? "results" : "search")}
+          onBack={() => setView(selectedCourse ? "results" : "home")}
         />
       ) : null}
 
@@ -161,7 +131,7 @@ export function App() {
           favorites={favorites}
           onRemove={(id) => void removeFavorite(id).then(setFavorites)}
           onOpenCourse={openCourseByCode}
-          onBrowse={() => setView("search")}
+          onBackHome={() => setView("home")}
         />
       ) : null}
 
